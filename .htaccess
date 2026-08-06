@@ -1,0 +1,48 @@
+# Centralized Apache URL Rewrite Rules for BBSL CRM
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /crm/
+
+    # Allow direct access to physical static files (images, css, js, etc.)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Root Routes
+    RewriteRule ^login/?$ login.php [L]
+    RewriteRule ^dashboard/?$ dashboard.php [L]
+    RewriteRule ^logout/?$ logout.php [L]
+
+    # Feature Module UI Routes
+    RewriteRule ^customers/?$ modules/customers/index.php [L]
+    RewriteRule ^customers/create/?$ modules/customers/create.php [L]
+    RewriteRule ^customers/edit/([0-9]+)/?$ modules/customers/edit.php?id=$1 [QSA,L]
+    RewriteRule ^customers/view/([0-9]+)/?$ modules/customers/view.php?id=$1 [QSA,L]
+
+    RewriteRule ^leads/?$ modules/leads/index.php [L]
+    RewriteRule ^leads/create/?$ modules/leads/create.php [L]
+    RewriteRule ^leads/edit/([0-9]+)/?$ modules/leads/edit.php?id=$1 [QSA,L]
+
+    RewriteRule ^deals/?$ modules/deals/index.php [L]
+    RewriteRule ^deals/create/?$ modules/deals/create.php [L]
+    RewriteRule ^deals/edit/([0-9]+)/?$ modules/deals/edit.php?id=$1 [QSA,L]
+
+    RewriteRule ^tasks/?$ modules/tasks/index.php [L]
+    RewriteRule ^products/?$ modules/products/index.php [L]
+    RewriteRule ^reports/?$ modules/reports/index.php [L]
+    RewriteRule ^settings/?$ modules/settings/index.php [L]
+    RewriteRule ^users/?$ modules/users/index.php [L]
+    RewriteRule ^profile/?$ modules/profile/index.php [L]
+
+    # Centralized AJAX Handler Routes
+    RewriteRule ^ajax/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)/?$ ajax/$1/$2.php [QSA,L]
+
+    # Centralized API Routes
+    RewriteRule ^api/([a-zA-Z0-9_-]+)/?([a-zA-Z0-9_-]+)?/?$ api/$1/index.php?endpoint=$2 [QSA,L]
+</IfModule>
+
+# php -- BEGIN cPanel-generated handler, do not edit
+<IfModule mime_module>
+  AddHandler application/x-httpd-ea-php81___lsphp .php .php8 .phtml
+</IfModule>
+# php -- END cPanel-generated handler, do not edit
