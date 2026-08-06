@@ -11,27 +11,44 @@ if (!isset($_SESSION['user_id'])) {
 
 require_once __DIR__ . '/../../includes/header.php';
 
-// Sales Team Representative Performance Metrics Query
+// Sales Team Representative Performance Metrics Query (Aggregated Subqueries to prevent Cartesian Product Multiplication)
 $performanceStmt = $pdo->query("
     SELECT 
         u.id,
         COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.name, u.email) as rep_name,
         u.email,
-        COUNT(DISTINCT l.id) as total_leads,
-        COUNT(DISTINCT d.id) as total_deals,
-        COUNT(DISTINCT CASE WHEN d.stage = 'closed_won' THEN d.id END) as won_deals,
-        COALESCE(SUM(CASE WHEN d.stage = 'closed_won' THEN d.value ELSE 0 END), 0) as won_revenue
+        COALESCE(l.total_leads, 0) as total_leads,
+        COALESCE(d.total_deals, 0) as total_deals,
+        COALESCE(d.won_deals, 0) as won_deals,
+        COALESCE(d.won_usd_revenue, 0) as won_usd_revenue,
+        COALESCE(d.won_ngn_revenue, 0) as won_ngn_revenue
     FROM users u
-    LEFT JOIN leads l ON l.assigned_to = u.id AND l.is_archived = 0
-    LEFT JOIN deals d ON d.assigned_to = u.id AND d.is_archived = 0
+    LEFT JOIN (
+        SELECT assigned_to, COUNT(*) as total_leads 
+        FROM leads 
+        WHERE is_archived = 0 AND assigned_to IS NOT NULL 
+        GROUP BY assigned_to
+    ) l ON l.assigned_to = u.id
+    LEFT JOIN (
+        SELECT 
+            assigned_to,
+            COUNT(*) as total_deals,
+            COUNT(CASE WHEN stage = 'closed_won' THEN 1 END) as won_deals,
+            SUM(CASE WHEN stage = 'closed_won' AND (UPPER(currency) = 'USD' OR currency = '$' OR currency IS NULL OR currency = '') THEN value ELSE 0 END) as won_usd_revenue,
+            SUM(CASE WHEN stage = 'closed_won' AND (UPPER(currency) LIKE '%NGN%' OR currency = '₦') THEN value ELSE 0 END) as won_ngn_revenue
+        FROM deals
+        WHERE is_archived = 0 AND assigned_to IS NOT NULL
+        GROUP BY assigned_to
+    ) d ON d.assigned_to = u.id
     WHERE u.is_archived = 0
-    GROUP BY u.id, u.first_name, u.last_name, u.name, u.email
-    ORDER BY won_revenue DESC, won_deals DESC
+    ORDER BY won_usd_revenue DESC, won_ngn_revenue DESC, won_deals DESC
 ");
 $repPerformance = $performanceStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate Summary Statistics
-$totalTeamRevenue = array_sum(array_column($repPerformance, 'won_revenue'));
+$totalTeamWonUsd = array_sum(array_column($repPerformance, 'won_usd_revenue'));
+$totalTeamWonNgn = array_sum(array_column($repPerformance, 'won_ngn_revenue'));
+
 $totalTeamDeals = array_sum(array_column($repPerformance, 'total_deals'));
 $totalTeamWonDeals = array_sum(array_column($repPerformance, 'won_deals'));
 $avgTeamWinRate = ($totalTeamDeals > 0) ? round(($totalTeamWonDeals / $totalTeamDeals) * 100, 1) : 0;
@@ -39,7 +56,8 @@ $topRepName = !empty($repPerformance) ? $repPerformance[0]['rep_name'] : 'N/A';
 
 // Prepare Chart Data
 $repNames = array_column($repPerformance, 'rep_name');
-$repRevenues = array_column($repPerformance, 'won_revenue');
+$repUsdRevenues = array_column($repPerformance, 'won_usd_revenue');
+$repNgnRevenues = array_column($repPerformance, 'won_ngn_revenue');
 $repWinRates = array_map(function($r) {
     return ($r['total_deals'] > 0) ? round(($r['won_deals'] / $r['total_deals']) * 100, 1) : 0;
 }, $repPerformance);
@@ -54,15 +72,43 @@ $repWinRates = array_map(function($r) {
         <div>
             <?php renderBreadcrumb([['label' => 'Reports', 'url' => '']]); ?>
             <h2 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Sales Team Performance Reports</h2>
-            <p class="text-muted small mb-0">Evaluate representative productivity, deal close rates, and revenue contributions.</p>
+            <p class="text-muted small mb-0">Evaluate representative productivity, deal close rates, and revenue contributions natively in USD ($) and NGN (₦).</p>
         </div>
     </div>
 
     <!-- Executive KPI Strip -->
     <div class="row g-3 mb-4">
+        <!-- Closed Revenue Card with Vertical Line Split for USD and NGN -->
         <div class="col-12 col-sm-6 col-xl-3">
-            <?php renderStatCard('Closed Revenue', 'USD ' . number_format($totalTeamRevenue, 2), 'trophy', 'success', 'Total won value'); ?>
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100 p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-uppercase text-muted fw-bold small" style="font-size: 0.75rem;">Closed Revenue</span>
+                    <div class="rounded-circle bg-light p-2 text-success d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                        <i data-lucide="trophy" class="lucide-icon text-success"></i>
+                    </div>
+                </div>
+                
+                <!-- Vertical Split Layout for USD and NGN -->
+                <div class="row g-0 align-items-center mt-2">
+                    <!-- Left Side: USD Won Revenue -->
+                    <div class="col-6 pe-2 border-end border-secondary-subtle">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">USD ($)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="$<?php echo number_format($totalTeamWonUsd, 2); ?>">
+                            $<?php echo number_format($totalTeamWonUsd, 2); ?>
+                        </span>
+                    </div>
+                    
+                    <!-- Right Side: NGN Won Revenue -->
+                    <div class="col-6 ps-3">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">NGN (₦)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="₦<?php echo number_format($totalTeamWonNgn, 2); ?>">
+                            ₦<?php echo number_format($totalTeamWonNgn, 2); ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
+
         <div class="col-12 col-sm-6 col-xl-3">
             <?php renderStatCard('Average Win Rate', $avgTeamWinRate . '%', 'pie-chart', 'primary', 'Team average close rate'); ?>
         </div>
@@ -81,7 +127,7 @@ $repWinRates = array_map(function($r) {
             <div class="card border-0 shadow-sm rounded-3 h-100">
                 <div class="card-header bg-white border-bottom p-3.5 d-flex align-items-center gap-2">
                     <i data-lucide="bar-chart-3" class="lucide-icon text-primary"></i>
-                    <h6 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Revenue Closed by Representative ($)</h6>
+                    <h6 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Revenue Closed by Representative ($ / ₦)</h6>
                 </div>
                 <div class="card-body p-3 d-flex align-items-center justify-content-center">
                     <div style="width: 100%; height: 280px;">
@@ -114,7 +160,7 @@ $repWinRates = array_map(function($r) {
                 <i data-lucide="award" class="lucide-icon text-primary"></i>
                 <h6 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Representative Performance Leaderboard</h6>
             </div>
-            <span class="text-muted small">Sorted by Won Revenue</span>
+            <span class="text-muted small">Sorted by Native Won Revenue</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -125,7 +171,7 @@ $repWinRates = array_map(function($r) {
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Leads Assigned</th>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Total Opportunities</th>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Deals Won</th>
-                            <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Revenue Closed ($)</th>
+                            <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Revenue Closed ($ / ₦)</th>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold text-end" style="font-size: 0.75rem;">Win Conversion Rate</th>
                         </tr>
                     </thead>
@@ -152,7 +198,10 @@ $repWinRates = array_map(function($r) {
                                     <td class="py-3 px-4"><span class="badge badge-soft-info rounded-pill"><?php echo number_format($rep['total_leads']); ?></span></td>
                                     <td class="py-3 px-4 text-muted"><?php echo number_format($rep['total_deals']); ?></td>
                                     <td class="py-3 px-4"><span class="badge badge-soft-success rounded-pill"><?php echo number_format($rep['won_deals']); ?></span></td>
-                                    <td class="py-3 px-4 fw-bold text-primary">USD <?php echo number_format($rep['won_revenue'], 2); ?></td>
+                                    <td class="py-3 px-4">
+                                        <div class="fw-bold text-primary">$<?php echo number_format($rep['won_usd_revenue'], 2); ?></div>
+                                        <div class="text-muted small">₦<?php echo number_format($rep['won_ngn_revenue'], 2); ?></div>
+                                    </td>
                                     <td class="py-3 px-4 text-end">
                                         <div class="d-flex align-items-center justify-content-end gap-2">
                                             <div class="progress flex-grow-1" style="height: 6px; max-width: 90px; background-color: #e2e8f0;">
@@ -175,29 +224,39 @@ $repWinRates = array_map(function($r) {
 document.addEventListener('DOMContentLoaded', function() {
     const fontFamily = "'Outfit', sans-serif";
 
-    // 1. Revenue Closed Chart
+    // 1. Revenue Closed Chart (Grouped USD vs NGN Bar Chart)
     const ctxRevenue = document.getElementById('repRevenueChart').getContext('2d');
     new Chart(ctxRevenue, {
         type: 'bar',
         data: {
             labels: <?php echo json_encode($repNames); ?>,
-            datasets: [{
-                label: 'Revenue Closed ($)',
-                data: <?php echo json_encode($repRevenues); ?>,
-                backgroundColor: '#12b1b0',
-                borderRadius: 6
-            }]
+            datasets: [
+                {
+                    label: 'USD ($)',
+                    data: <?php echo json_encode($repUsdRevenues); ?>,
+                    backgroundColor: '#12b1b0',
+                    borderRadius: 6
+                },
+                {
+                    label: 'NGN (₦)',
+                    data: <?php echo json_encode($repNgnRevenues); ?>,
+                    backgroundColor: '#3b82f6',
+                    borderRadius: 6
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { 
+                legend: { position: 'top', labels: { font: { family: fontFamily, size: 11 }, boxWidth: 12 } } 
+            },
             scales: {
                 y: { 
                     beginAtZero: true, 
                     ticks: { 
                         font: { family: fontFamily },
-                        callback: function(v) { return '$' + v.toLocaleString(); }
+                        callback: function(v) { return v.toLocaleString(); }
                     } 
                 },
                 x: { ticks: { font: { family: fontFamily, size: 11 } } }

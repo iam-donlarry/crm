@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_id'])) sendResponse(false, 'Unauthorized');
 
 $input = getJsonInput();
-$id = $input['id'] ?? $_POST['id'] ?? null;
+$id = !empty($input['id'] ?? $_POST['id'] ?? null) ? intval($input['id'] ?? $_POST['id']) : null;
 
 if ($id) {
     if (!hasPermission('edit_tasks')) sendResponse(false, 'Forbidden');
@@ -21,10 +21,18 @@ $description = trim($input['description'] ?? $_POST['description'] ?? '');
 $type = $input['type'] ?? $_POST['type'] ?? 'todo';
 $status = $input['status'] ?? $_POST['status'] ?? 'pending';
 $priority = $input['priority'] ?? $_POST['priority'] ?? 'medium';
-$dueDate = $input['due_date'] ?? $_POST['due_date'] ?? null;
-$relatedToType = $input['related_to_type'] ?? $_POST['related_to_type'] ?? null;
-$relatedToId = $input['related_to_id'] ?? $_POST['related_to_id'] ?? null;
-$assignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? $_SESSION['user_id'];
+
+$rawDueDate = trim($input['due_date'] ?? $_POST['due_date'] ?? '');
+$dueDate = !empty($rawDueDate) ? $rawDueDate : null;
+
+$rawRelType = trim($input['related_to_type'] ?? $_POST['related_to_type'] ?? '');
+$relatedToType = !empty($rawRelType) ? $rawRelType : null;
+
+$rawRelId = $input['related_to_id'] ?? $_POST['related_to_id'] ?? null;
+$relatedToId = !empty($rawRelId) ? intval($rawRelId) : null;
+
+$rawAssignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? null;
+$assignedTo = !empty($rawAssignedTo) ? intval($rawAssignedTo) : $_SESSION['user_id'];
 
 if (empty($title)) sendResponse(false, 'Task title is required');
 

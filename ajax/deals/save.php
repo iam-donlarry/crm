@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_id'])) sendResponse(false, 'Unauthorized');
 
 $input = getJsonInput();
-$id = $input['id'] ?? $_POST['id'] ?? null;
+$id = !empty($input['id'] ?? $_POST['id'] ?? null) ? intval($input['id'] ?? $_POST['id']) : null;
 
 if ($id) {
     if (!hasPermission('edit_deals')) sendResponse(false, 'Forbidden');
@@ -17,17 +17,26 @@ if ($id) {
 }
 
 $title = trim($input['title'] ?? $_POST['title'] ?? '');
-$customerId = $input['customer_id'] ?? $_POST['customer_id'] ?? null;
-$leadId = $input['lead_id'] ?? $_POST['lead_id'] ?? null;
+$rawCustomerId = $input['customer_id'] ?? $_POST['customer_id'] ?? null;
+$rawLeadId = $input['lead_id'] ?? $_POST['lead_id'] ?? null;
+$rawAssignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? null;
+
+$customerId = !empty($rawCustomerId) ? intval($rawCustomerId) : null;
+$leadId = !empty($rawLeadId) ? intval($rawLeadId) : null;
+$assignedTo = !empty($rawAssignedTo) ? intval($rawAssignedTo) : $_SESSION['user_id'];
+
 $value = floatval($input['value'] ?? $_POST['value'] ?? 0);
 $stage = $input['stage'] ?? $_POST['stage'] ?? 'qualification';
 $currency = $input['currency'] ?? $_POST['currency'] ?? 'USD';
 $exchangeRate = floatval($input['exchange_rate'] ?? $_POST['exchange_rate'] ?? 1.0);
-$validUntil = $input['valid_until'] ?? $_POST['valid_until'] ?? null;
-$dueDate = $input['due_date'] ?? $_POST['due_date'] ?? null;
+
+$rawValidUntil = trim($input['valid_until'] ?? $_POST['valid_until'] ?? '');
+$rawDueDate = trim($input['due_date'] ?? $_POST['due_date'] ?? '');
+$validUntil = !empty($rawValidUntil) ? $rawValidUntil : null;
+$dueDate = !empty($rawDueDate) ? $rawDueDate : null;
+
 $description = trim($input['description'] ?? $_POST['description'] ?? '');
 $termsConditions = trim($input['terms_conditions'] ?? $_POST['terms_conditions'] ?? '');
-$assignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? $_SESSION['user_id'];
 $products = $input['products'] ?? [];
 
 if (empty($title)) {
@@ -52,15 +61,15 @@ try {
 
     // Save line item products if provided
     if (!empty($products) && is_array($products)) {
-        // Delete existing items
         $delStmt = $pdo->prepare("DELETE FROM deal_products WHERE deal_id = ?");
         $delStmt->execute([$dealId]);
 
         $insStmt = $pdo->prepare("INSERT INTO deal_products (deal_id, product_id, product_name, description, quantity, price, total) VALUES (?, ?, ?, ?, ?, ?, ?)");
         foreach ($products as $p) {
+            $prodId = !empty($p['product_id']) ? intval($p['product_id']) : null;
             $insStmt->execute([
                 $dealId,
-                $p['product_id'] ?? null,
+                $prodId,
                 $p['product_name'] ?? '',
                 $p['description'] ?? '',
                 $p['quantity'] ?? 1,

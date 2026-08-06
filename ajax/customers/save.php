@@ -11,7 +11,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $input = getJsonInput();
-$id = $input['id'] ?? $_POST['id'] ?? null;
+$id = !empty($input['id'] ?? $_POST['id'] ?? null) ? intval($input['id'] ?? $_POST['id']) : null;
 
 if ($id) {
     if (!hasPermission('edit_customers')) sendResponse(false, 'Forbidden: Cannot edit customer');
@@ -30,7 +30,9 @@ $state = trim($input['state'] ?? $_POST['state'] ?? '');
 $zip = trim($input['zip'] ?? $_POST['zip'] ?? '');
 $country = trim($input['country'] ?? $_POST['country'] ?? '');
 $notes = trim($input['notes'] ?? $_POST['notes'] ?? '');
-$assignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? $_SESSION['user_id'];
+
+$rawAssignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? null;
+$assignedTo = !empty($rawAssignedTo) ? intval($rawAssignedTo) : $_SESSION['user_id'];
 
 if (empty($firstName) && empty($company)) {
     sendResponse(false, 'Either First Name or Company Name is required');

@@ -23,22 +23,53 @@ $sql = "SELECT d.*,
         ORDER BY d.created_at DESC";
 $deals = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
+// Normalize native currency tags
+foreach ($deals as &$d) {
+    $curr = strtoupper(trim($d['currency'] ?? 'USD'));
+    if (strpos($curr, 'NGN') !== false || strpos($curr, '₦') !== false) {
+        $d['native_currency'] = 'NGN';
+        $d['currency_symbol'] = '₦';
+    } else {
+        $d['native_currency'] = 'USD';
+        $d['currency_symbol'] = '$';
+    }
+}
+unset($d);
+
+// Separate open and won deals by native creation currency (No artificial exchange conversion)
+$openUsdDeals = array_filter($deals, fn($d) => !in_array($d['stage'], ['closed_won', 'closed_lost']) && $d['native_currency'] === 'USD');
+$openNgnDeals = array_filter($deals, fn($d) => !in_array($d['stage'], ['closed_won', 'closed_lost']) && $d['native_currency'] === 'NGN');
+
+$openUsdSum = array_sum(array_column($openUsdDeals, 'value'));
+$openNgnSum = array_sum(array_column($openNgnDeals, 'value'));
+
+$wonUsdDeals = array_filter($deals, fn($d) => $d['stage'] === 'closed_won' && $d['native_currency'] === 'USD');
+$wonNgnDeals = array_filter($deals, fn($d) => $d['stage'] === 'closed_won' && $d['native_currency'] === 'NGN');
+
+$wonUsdSum = array_sum(array_column($wonUsdDeals, 'value'));
+$wonNgnSum = array_sum(array_column($wonNgnDeals, 'value'));
+
+// Fetch dropdown options for form
+$customers = $pdo->query("SELECT id, display_name, company FROM customers WHERE is_archived = 0 ORDER BY display_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$leads = $pdo->query("SELECT id, display_name, company FROM leads WHERE is_archived = 0 ORDER BY display_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$users = $pdo->query("SELECT id, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), name, email) as name FROM users WHERE is_archived = 0 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+
 // Stage configurations with colors and soft badge styles
 $stages = [
-    'qualification' => ['title' => 'Qualification', 'color' => '#3b82f6', 'badge' => 'badge-soft-info', 'icon' => 'check-circle'],
-    'value_proposition' => ['title' => 'Value Proposition', 'color' => '#8b5cf6', 'badge' => 'badge-soft-primary', 'icon' => 'file-text'],
-    'proposal_quote' => ['title' => 'Proposal / Quote', 'color' => '#f59e0b', 'badge' => 'badge-soft-warning', 'icon' => 'file-spreadsheet'],
-    'negotiation_review' => ['title' => 'Negotiation', 'color' => '#06b6d4', 'badge' => 'badge-soft-info', 'icon' => 'sliders'],
-    'closed_won' => ['title' => 'Closed Won', 'color' => '#10b981', 'badge' => 'badge-soft-success', 'icon' => 'trophy'],
-    'closed_lost' => ['title' => 'Closed Lost', 'color' => '#ef4444', 'badge' => 'badge-soft-danger', 'icon' => 'x-circle']
+    'qualification' => ['title' => 'Qualification', 'color' => '#3b82f6', 'badge' => 'badge-soft-info'],
+    'value_proposition' => ['title' => 'Value Proposition', 'color' => '#8b5cf6', 'badge' => 'badge-soft-primary'],
+    'proposal_quote' => ['title' => 'Proposal / Quote', 'color' => '#f59e0b', 'badge' => 'badge-soft-warning'],
+    'negotiation_review' => ['title' => 'Negotiation', 'color' => '#06b6d4', 'badge' => 'badge-soft-info'],
+    'closed_won' => ['title' => 'Closed Won', 'color' => '#10b981', 'badge' => 'badge-soft-success'],
+    'closed_lost' => ['title' => 'Closed Lost', 'color' => '#ef4444', 'badge' => 'badge-soft-danger']
 ];
 
-// Metrics Calculations
-$openDeals = array_filter($deals, fn($d) => !in_array($d['stage'], ['closed_won', 'closed_lost']));
-$totalPipelineValue = array_sum(array_column($openDeals, 'value'));
-$wonDeals = array_filter($deals, fn($d) => $d['stage'] === 'closed_won');
-$totalWonValue = array_sum(array_column($wonDeals, 'value'));
-$winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100, 1) : 0;
+$nextStageMap = [
+    'qualification' => ['key' => 'value_proposition', 'title' => 'Value Proposition'],
+    'value_proposition' => ['key' => 'proposal_quote', 'title' => 'Proposal / Quote'],
+    'proposal_quote' => ['key' => 'negotiation_review', 'title' => 'Negotiation'],
+    'negotiation_review' => ['key' => 'closed_won', 'title' => 'Closed Won']
+];
 ?>
 
 <div class="container-fluid px-0">
@@ -47,11 +78,24 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
         <div>
             <?php renderBreadcrumb([['label' => 'Deals', 'url' => '']]); ?>
             <h2 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Deals & Sales Pipeline</h2>
-            <p class="text-muted small mb-0">Interactive stage stepper, multi-currency values, and close rates.</p>
+            <p class="text-muted small mb-0">Track original USD ($) and NGN (₦) opportunities separately without artificial conversions.</p>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <!-- Native Currency Filter Switcher Pill -->
+            <div class="btn-group p-1 bg-white border rounded-pill shadow-sm" role="group" title="Filter deals by native creation currency">
+                <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 active" id="currAllBtn" onclick="filterCurrencyDisplay('ALL')">
+                    All Currencies
+                </button>
+                <button type="button" class="btn btn-sm btn-light rounded-pill px-3 text-secondary" id="currUsdBtn" onclick="filterCurrencyDisplay('USD')">
+                    <i data-lucide="dollar-sign" class="lucide-icon me-0.5"></i> USD ($) Only
+                </button>
+                <button type="button" class="btn btn-sm btn-light rounded-pill px-3 text-secondary" id="currNgnBtn" onclick="filterCurrencyDisplay('NGN')">
+                    <i data-lucide="banknote" class="lucide-icon me-0.5"></i> NGN (₦) Only
+                </button>
+            </div>
+
             <!-- View Mode Switcher -->
-            <div class="btn-group p-1 bg-white border rounded-pill shadow-sm" role="group">
+            <div class="btn-group p-1 bg-white border rounded-pill shadow-sm ms-1" role="group">
                 <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 active" id="gridModeBtn" onclick="switchViewMode('grid')">
                     <i data-lucide="layout-grid" class="lucide-icon me-1"></i> Grid
                 </button>
@@ -61,26 +105,82 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
             </div>
             
             <?php if (hasPermission('create_deals')): ?>
-                <a href="<?php echo BASE_URL; ?>/deals/create" class="btn btn-primary rounded-pill px-4 shadow-sm ms-2">
+                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm ms-2" data-bs-toggle="offcanvas" data-bs-target="#dealOffcanvas" onclick="resetDealForm()">
                     <i data-lucide="plus" class="lucide-icon me-1"></i> New Deal
-                </a>
+                </button>
             <?php endif; ?>
         </div>
     </div>
 
-    <!-- Executive KPI Strip -->
+    <!-- Executive KPI Strip: Consolidated Vertical Split Cards for USD and NGN -->
     <div class="row g-3 mb-4">
+        <!-- Card 1: Open Pipeline Value (Vertical Split) -->
         <div class="col-12 col-sm-6 col-xl-3">
-            <?php renderStatCard('Open Pipeline Value', 'USD ' . number_format($totalPipelineValue, 2), 'trending-up', 'primary', count($openDeals) . ' active deals'); ?>
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100 p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-uppercase text-muted fw-bold small" style="font-size: 0.75rem;">Open Pipeline Value</span>
+                    <div class="rounded-circle bg-light p-2 text-primary d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                        <i data-lucide="trending-up" class="lucide-icon text-primary"></i>
+                    </div>
+                </div>
+                <div class="row g-0 align-items-center mt-2">
+                    <div class="col-6 pe-2 border-end border-secondary-subtle">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">USD ($)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="$<?php echo number_format($openUsdSum, 2); ?>">
+                            $<?php echo number_format($openUsdSum, 2); ?>
+                        </span>
+                        <span class="text-muted small d-block mt-0.5" style="font-size: 0.7rem;"><?php echo count($openUsdDeals); ?> deals</span>
+                    </div>
+                    <div class="col-6 ps-3">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">NGN (₦)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="₦<?php echo number_format($openNgnSum, 2); ?>">
+                            ₦<?php echo number_format($openNgnSum, 2); ?>
+                        </span>
+                        <span class="text-muted small d-block mt-0.5" style="font-size: 0.7rem;"><?php echo count($openNgnDeals); ?> deals</span>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- Card 2: Closed Won Revenue (Vertical Split) -->
         <div class="col-12 col-sm-6 col-xl-3">
-            <?php renderStatCard('Closed Won Revenue', 'USD ' . number_format($totalWonValue, 2), 'trophy', 'success', count($wonDeals) . ' won opportunities'); ?>
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100 p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-uppercase text-muted fw-bold small" style="font-size: 0.75rem;">Closed Won Revenue</span>
+                    <div class="rounded-circle bg-light p-2 text-success d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                        <i data-lucide="trophy" class="lucide-icon text-success"></i>
+                    </div>
+                </div>
+                <div class="row g-0 align-items-center mt-2">
+                    <div class="col-6 pe-2 border-end border-secondary-subtle">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">USD ($)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="$<?php echo number_format($wonUsdSum, 2); ?>">
+                            $<?php echo number_format($wonUsdSum, 2); ?>
+                        </span>
+                        <span class="text-muted small d-block mt-0.5" style="font-size: 0.7rem;"><?php echo count($wonUsdDeals); ?> won</span>
+                    </div>
+                    <div class="col-6 ps-3">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">NGN (₦)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="₦<?php echo number_format($wonNgnSum, 2); ?>">
+                            ₦<?php echo number_format($wonNgnSum, 2); ?>
+                        </span>
+                        <span class="text-muted small d-block mt-0.5" style="font-size: 0.7rem;"><?php echo count($wonNgnDeals); ?> won</span>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- Card 3: Total Opportunities -->
         <div class="col-12 col-sm-6 col-xl-3">
             <?php renderStatCard('Total Opportunities', count($deals), 'briefcase', 'info', 'All time deals'); ?>
         </div>
+
+        <!-- Card 4: Win Conversion Rate -->
         <div class="col-12 col-sm-6 col-xl-3">
-            <?php renderStatCard('Win Conversion Rate', $winRate . '%', 'pie-chart', 'warning', 'Won vs total deals'); ?>
+            <?php 
+                $winRate = (count($deals) > 0) ? round((count($wonUsdDeals) + count($wonNgnDeals)) / count($deals) * 100, 1) : 0;
+                renderStatCard('Win Conversion Rate', $winRate . '%', 'pie-chart', 'warning', 'Won vs total deals'); 
+            ?>
         </div>
     </div>
 
@@ -103,7 +203,7 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                         <span class="badge bg-white text-dark rounded-pill"><?php echo count($deals); ?></span>
                     </div>
                     <div class="small opacity-85" style="font-size: 0.725rem;">
-                        USD <?php echo number_format($totalPipelineValue + $totalWonValue, 2); ?>
+                        $<?php echo number_format($openUsdSum + $wonUsdSum, 0); ?> | ₦<?php echo number_format($openNgnSum + $wonNgnSum, 0); ?>
                     </div>
                 </button>
 
@@ -111,7 +211,8 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                 <?php foreach ($stages as $stageKey => $stageInfo): ?>
                     <?php 
                         $stageDeals = array_filter($deals, fn($d) => $d['stage'] === $stageKey);
-                        $stageSum = array_sum(array_column($stageDeals, 'value'));
+                        $sUsdSum = array_sum(array_column(array_filter($stageDeals, fn($d) => $d['native_currency'] === 'USD'), 'value'));
+                        $sNgnSum = array_sum(array_column(array_filter($stageDeals, fn($d) => $d['native_currency'] === 'NGN'), 'value'));
                     ?>
                     <button type="button" class="btn btn-sm btn-light border rounded-3 py-2.5 px-3 d-flex flex-column align-items-start stage-tab" data-stage="<?php echo $stageKey; ?>" onclick="selectStageTab('<?php echo $stageKey; ?>')">
                         <div class="d-flex align-items-center justify-content-between w-100 gap-2 mb-1">
@@ -122,7 +223,7 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                             <span class="badge rounded-pill <?php echo $stageInfo['badge']; ?>"><?php echo count($stageDeals); ?></span>
                         </div>
                         <div class="text-muted small" style="font-size: 0.725rem;">
-                            USD <?php echo number_format($stageSum, 2); ?>
+                            $<?php echo number_format($sUsdSum, 0); ?> | ₦<?php echo number_format($sNgnSum, 0); ?>
                         </div>
                     </button>
                 <?php endforeach; ?>
@@ -150,8 +251,10 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
     <!-- 1. FOCUSED DEAL CARD GRID VIEW -->
     <div id="gridContainer" class="row g-3 mb-4">
         <?php if (empty($deals)): ?>
-            <div class="col-12 text-center py-5">
-                <?php renderEmptyState('No Deals Found', 'There are no active deals in the system. Click "New Deal" to add an opportunity.', 'briefcase', BASE_URL . '/deals/create', 'Create Deal'); ?>
+            <div class="col-12 text-center py-5 text-muted">
+                <i data-lucide="briefcase" class="lucide-icon d-block mx-auto mb-2 opacity-50" style="width: 48px; height: 48px;"></i>
+                <h5>No Opportunities Found</h5>
+                <p class="small mb-3">Click "New Deal" to register a sales opportunity.</p>
             </div>
         <?php else: ?>
             <?php foreach ($deals as $d): ?>
@@ -161,16 +264,24 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                     $stageInfo = $stages[$d['stage']] ?? ['title' => ucfirst($d['stage']), 'badge' => 'badge-soft-secondary', 'color' => '#64748b'];
                     $dueDateText = $d['due_date'] ? date('M j, Y', strtotime($d['due_date'])) : null;
                     $isOverdue = ($d['due_date'] && strtotime($d['due_date']) < time() && !in_array($d['stage'], ['closed_won', 'closed_lost']));
+                    $hasNextStage = isset($nextStageMap[$d['stage']]);
+                    $nextStageObj = $nextStageMap[$d['stage']] ?? null;
+                    $currBadgeClass = ($d['native_currency'] === 'NGN') ? 'badge-soft-info' : 'badge-soft-primary';
                 ?>
-                <div class="col-12 col-md-6 col-xl-4 deal-card-item" data-stage="<?php echo $d['stage']; ?>" data-title="<?php echo htmlspecialchars(strtolower($d['title'] . ' ' . $custName . ' ' . ($d['quote_number'] ?? ''))); ?>">
+                <div class="col-12 col-md-6 col-xl-4 deal-card-item" data-stage="<?php echo $d['stage']; ?>" data-currency="<?php echo $d['native_currency']; ?>" data-title="<?php echo htmlspecialchars(strtolower($d['title'] . ' ' . $custName . ' ' . ($d['quote_number'] ?? ''))); ?>">
                     <div class="card border shadow-sm rounded-3 h-100 bg-white hover-shadow transition-all" style="border-left: 4px solid <?php echo $stageInfo['color']; ?> !important;">
                         <div class="card-body p-3.5 d-flex flex-column">
                             
-                            <!-- Stage Badge & Quote Number -->
+                            <!-- Stage Badge, Native Currency Badge & Quote Number -->
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge rounded-pill <?php echo $stageInfo['badge']; ?>">
-                                    <?php echo htmlspecialchars($stageInfo['title']); ?>
-                                </span>
+                                <div class="d-flex align-items-center gap-1.5">
+                                    <span class="badge rounded-pill <?php echo $stageInfo['badge']; ?>">
+                                        <?php echo htmlspecialchars($stageInfo['title']); ?>
+                                    </span>
+                                    <span class="badge rounded-pill <?php echo $currBadgeClass; ?>">
+                                        <?php echo $d['native_currency']; ?>
+                                    </span>
+                                </div>
                                 <?php if ($d['quote_number']): ?>
                                     <span class="badge badge-soft-secondary small"><?php echo htmlspecialchars($d['quote_number']); ?></span>
                                 <?php endif; ?>
@@ -189,13 +300,13 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                                 <?php echo htmlspecialchars($custName); ?>
                             </div>
 
-                            <!-- Value & Target Date Block -->
-                            <div class="p-2.5 rounded-3 bg-light mb-3 mt-auto border border-dashed">
+                            <!-- Native Creation Deal Value & Target Date Block -->
+                            <div class="py-2 mb-3 mt-auto">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <span class="text-muted d-block" style="font-size: 0.725rem;">Deal Value</span>
-                                        <span class="fw-bold text-primary" style="font-size: 1.1rem; font-family: 'Outfit', sans-serif;">
-                                            <?php echo htmlspecialchars($d['currency']) . ' ' . number_format($d['value'], 2); ?>
+                                        <span class="text-muted d-block" style="font-size: 0.725rem;">Original Deal Value</span>
+                                        <span class="fw-bold text-primary d-block" style="font-size: 1.15rem; font-family: 'Outfit', sans-serif;">
+                                            <?php echo $d['currency_symbol'] . ' ' . number_format($d['value'], 2); ?>
                                         </span>
                                     </div>
                                     <?php if ($dueDateText): ?>
@@ -208,6 +319,27 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                                     <?php endif; ?>
                                 </div>
                             </div>
+
+                            <!-- 1-Click Stage Advancer Action Bar -->
+                            <?php if (hasPermission('edit_deals')): ?>
+                                <div class="mb-3 d-flex gap-2">
+                                    <?php if ($hasNextStage): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill flex-grow-1 d-flex align-items-center justify-content-center gap-1 shadow-sm" style="font-size: 0.775rem;" onclick="advanceDealStage(<?php echo $d['id']; ?>, '<?php echo $d['stage']; ?>', '<?php echo htmlspecialchars(addslashes($d['title'])); ?>', <?php echo $d['value']; ?>, '<?php echo $d['currency_symbol']; ?>')">
+                                            <span>Advance to <strong><?php echo htmlspecialchars($nextStageObj['title']); ?></strong></span>
+                                            <i data-lucide="arrow-right" class="lucide-icon" style="width: 14px; height: 14px;"></i>
+                                        </button>
+                                    <?php endif; ?>
+
+                                    <?php if (!in_array($d['stage'], ['closed_won', 'closed_lost'])): ?>
+                                        <button type="button" class="btn btn-sm btn-light border text-success rounded-circle d-flex align-items-center justify-content-center" title="Mark Closed Won" style="width: 32px; height: 32px;" onclick="markDealWon(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>', <?php echo $d['value']; ?>, '<?php echo $d['currency_symbol']; ?>')">
+                                            <i data-lucide="trophy" class="lucide-icon text-success" style="width: 16px; height: 16px;"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-light border text-danger rounded-circle d-flex align-items-center justify-content-center" title="Mark Closed Lost" style="width: 32px; height: 32px;" onclick="markDealLost(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>')">
+                                            <i data-lucide="x-circle" class="lucide-icon text-danger" style="width: 16px; height: 16px;"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
 
                             <!-- Card Footer: Owner Avatar & Quick Actions -->
                             <div class="d-flex align-items-center justify-content-between pt-2 border-top">
@@ -225,11 +357,12 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                                     <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 text-small">
                                         <li><a class="dropdown-item py-2" href="#" onclick="viewDealModal(<?php echo $d['id']; ?>); return false;"><i data-lucide="eye" class="lucide-icon me-2"></i> View Details</a></li>
                                         <?php if (hasPermission('edit_deals')): ?>
+                                            <li><a class="dropdown-item py-2" href="#" onclick="editDeal(<?php echo $d['id']; ?>); return false;"><i data-lucide="edit-3" class="lucide-icon me-2"></i> Edit Deal</a></li>
                                             <li><hr class="dropdown-divider"></li>
-                                            <li class="dropdown-header small text-muted">Move Stage</li>
+                                            <li class="dropdown-header small text-muted">Direct Stage Move</li>
                                             <?php foreach ($stages as $sk => $si): ?>
                                                 <?php if ($sk !== $d['stage']): ?>
-                                                    <li><a class="dropdown-item py-1.5 small" href="#" onclick="updateDealStage(<?php echo $d['id']; ?>, '<?php echo $sk; ?>'); return false;"><?php echo htmlspecialchars($si['title']); ?></a></li>
+                                                    <li><a class="dropdown-item py-1.5 small" href="#" onclick="updateDealStage(<?php echo $d['id']; ?>, '<?php echo $sk; ?>', '<?php echo htmlspecialchars(addslashes($d['title'])); ?>'); return false;"><?php echo htmlspecialchars($si['title']); ?></a></li>
                                                 <?php endif; ?>
                                             <?php endforeach; ?>
                                         <?php endif; ?>
@@ -253,7 +386,7 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                         <tr>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Quote / Deal Title</th>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Customer / Prospect</th>
-                            <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Value</th>
+                            <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Original Value</th>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Stage</th>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Target Date</th>
                             <th class="py-3 px-4 text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Owner</th>
@@ -267,7 +400,7 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                                 $badgeClass = $stages[$d['stage']]['badge'] ?? 'badge-soft-secondary';
                                 $stageTitle = $stages[$d['stage']]['title'] ?? ucfirst($d['stage']);
                             ?>
-                            <tr class="deal-table-row" data-stage="<?php echo $d['stage']; ?>" data-title="<?php echo htmlspecialchars(strtolower($d['title'] . ' ' . $custName)); ?>">
+                            <tr class="deal-table-row" data-stage="<?php echo $d['stage']; ?>" data-currency="<?php echo $d['native_currency']; ?>" data-title="<?php echo htmlspecialchars(strtolower($d['title'] . ' ' . $custName)); ?>">
                                 <td class="py-3 px-4">
                                     <div class="fw-bold text-dark"><?php echo htmlspecialchars($d['title']); ?></div>
                                     <?php if ($d['quote_number']): ?>
@@ -275,7 +408,10 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-3 px-4 text-muted"><?php echo htmlspecialchars($custName); ?></td>
-                                <td class="py-3 px-4 fw-bold text-primary"><?php echo htmlspecialchars($d['currency']) . ' ' . number_format($d['value'], 2); ?></td>
+                                <td class="py-3 px-4">
+                                    <span class="fw-bold text-primary me-1"><?php echo $d['currency_symbol'] . ' ' . number_format($d['value'], 2); ?></span>
+                                    <span class="badge rounded-pill <?php echo ($d['native_currency'] === 'NGN') ? 'badge-soft-info' : 'badge-soft-primary'; ?>"><?php echo $d['native_currency']; ?></span>
+                                </td>
                                 <td class="py-3 px-4"><span class="badge rounded-pill <?php echo $badgeClass; ?>"><?php echo htmlspecialchars($stageTitle); ?></span></td>
                                 <td class="py-3 px-4 text-muted small"><?php echo $d['due_date'] ? date('M j, Y', strtotime($d['due_date'])) : '-'; ?></td>
                                 <td class="py-3 px-4 text-muted small"><?php echo htmlspecialchars($d['assigned_to_name'] ?: 'Unassigned'); ?></td>
@@ -287,11 +423,31 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                                         <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 text-small">
                                             <li><a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="viewDealModal(<?php echo $d['id']; ?>); return false;"><i data-lucide="eye" class="lucide-icon text-muted"></i> View Details</a></li>
                                             <?php if (hasPermission('edit_deals')): ?>
+                                                <li><a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="editDeal(<?php echo $d['id']; ?>); return false;"><i data-lucide="edit-3" class="lucide-icon text-muted"></i> Edit Deal</a></li>
                                                 <li><hr class="dropdown-divider my-1"></li>
-                                                <li class="dropdown-header small text-muted">Move Stage</li>
+                                                <?php if (isset($nextStageMap[$d['stage']])): ?>
+                                                    <li>
+                                                        <a class="dropdown-item py-2 text-primary fw-semibold d-flex align-items-center gap-2" href="#" onclick="advanceDealStage(<?php echo $d['id']; ?>, '<?php echo $d['stage']; ?>', '<?php echo htmlspecialchars(addslashes($d['title'])); ?>', <?php echo $d['value']; ?>, '<?php echo $d['currency_symbol']; ?>'); return false;">
+                                                            <i data-lucide="arrow-right-circle" class="lucide-icon text-primary"></i> Advance to <?php echo htmlspecialchars($nextStageMap[$d['stage']]['title']); ?>
+                                                        </a>
+                                                    </li>
+                                                <?php endif; ?>
+                                                <?php if (!in_array($d['stage'], ['closed_won', 'closed_lost'])): ?>
+                                                    <li>
+                                                        <a class="dropdown-item py-2 text-success d-flex align-items-center gap-2" href="#" onclick="markDealWon(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>', <?php echo $d['value']; ?>, '<?php echo $d['currency_symbol']; ?>'); return false;">
+                                                            <i data-lucide="trophy" class="lucide-icon text-success"></i> Mark Closed Won
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item py-2 text-danger d-flex align-items-center gap-2" href="#" onclick="markDealLost(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>'); return false;">
+                                                            <i data-lucide="x-circle" class="lucide-icon text-danger"></i> Mark Closed Lost
+                                                        </a>
+                                                    </li>
+                                                <?php endif; ?>
+                                                <li class="dropdown-header small text-muted mt-1">Direct Stage Move</li>
                                                 <?php foreach ($stages as $sk => $si): ?>
                                                     <?php if ($sk !== $d['stage']): ?>
-                                                        <li><a class="dropdown-item py-1.5 small" href="#" onclick="updateDealStage(<?php echo $d['id']; ?>, '<?php echo $sk; ?>'); return false;"><?php echo htmlspecialchars($si['title']); ?></a></li>
+                                                        <li><a class="dropdown-item py-1.5 small" href="#" onclick="updateDealStage(<?php echo $d['id']; ?>, '<?php echo $sk; ?>', '<?php echo htmlspecialchars(addslashes($d['title'])); ?>'); return false;"><?php echo htmlspecialchars($si['title']); ?></a></li>
                                                     <?php endif; ?>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
@@ -305,6 +461,92 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
             </div>
         </div>
     </div>
+</div>
+
+<!-- 50% WIDTH OFFCANVAS SLIDER FOR NEW / EDIT DEAL -->
+<div class="offcanvas offcanvas-end offcanvas-half" id="dealOffcanvas" tabindex="-1" aria-labelledby="dealOffcanvasLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title fw-bold text-dark" id="dealOffcanvasTitle" style="font-family: 'Outfit', sans-serif;">New Opportunity / Deal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <form id="dealForm" onsubmit="saveDeal(event)">
+        <div class="offcanvas-body p-4">
+            <input type="hidden" id="dealId" name="id">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Deal Title <span class="text-danger">*</span></label>
+                    <input type="text" id="dealTitleInput" name="title" class="form-control" placeholder="e.g. Enterprise CRM Software License" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Linked Customer</label>
+                    <select id="dealCustomerId" name="customer_id" class="form-select">
+                        <option value="">Select Customer (Optional)</option>
+                        <?php foreach ($customers as $c): ?>
+                            <option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['display_name'] . ($c['company'] ? ' (' . $c['company'] . ')' : '')); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Linked Inbound Lead</label>
+                    <select id="dealLeadId" name="lead_id" class="form-select">
+                        <option value="">Select Lead (Optional)</option>
+                        <?php foreach ($leads as $l): ?>
+                            <option value="<?php echo $l['id']; ?>"><?php echo htmlspecialchars($l['display_name'] . ($l['company'] ? ' (' . $l['company'] . ')' : '')); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Deal Value <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" id="dealValue" name="value" class="form-control" placeholder="5000.00" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Deal Creation Currency</label>
+                    <select id="dealCurrency" name="currency" class="form-select">
+                        <option value="USD" selected>USD ($)</option>
+                        <option value="NGN">NGN (₦)</option>
+                        <option value="GBP">GBP (£)</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Pipeline Stage</label>
+                    <select id="dealStage" name="stage" class="form-select">
+                        <?php foreach ($stages as $sk => $si): ?>
+                            <option value="<?php echo $sk; ?>"><?php echo htmlspecialchars($si['title']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Target Close Date</label>
+                    <input type="date" id="dealDueDate" name="due_date" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Quote Validity Until</label>
+                    <input type="date" id="dealValidUntil" name="valid_until" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Account Manager / Assigned Staff</label>
+                    <select id="dealAssignedTo" name="assigned_to" class="form-select">
+                        <option value="">Select Staff</option>
+                        <?php foreach ($users as $u): ?>
+                            <option value="<?php echo $u['id']; ?>"><?php echo htmlspecialchars($u['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Description / Scope of Work</label>
+                    <textarea id="dealDescription" name="description" class="form-control" rows="3" placeholder="Provide notes, requirement details, or proposal notes..."></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Terms & Conditions</label>
+                    <textarea id="dealTerms" name="terms_conditions" class="form-control" rows="2" placeholder="Standard payment and delivery terms..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="offcanvas-footer gap-2 d-flex justify-content-end">
+            <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="offcanvas">Cancel</button>
+            <button type="submit" class="btn btn-primary rounded-pill px-4">Save Opportunity</button>
+        </div>
+    </form>
 </div>
 
 <!-- Quick Deal Detail Modal -->
@@ -322,7 +564,7 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
                         <div class="p-3 bg-light rounded-3">
-                            <span class="text-muted small d-block">Deal Value</span>
+                            <span class="text-muted small d-block">Original Deal Value</span>
                             <h5 class="fw-bold text-primary mb-0" id="modalDealValue">$0.00</h5>
                         </div>
                     </div>
@@ -340,23 +582,6 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
                     </div>
                 </div>
 
-                <h6 class="fw-bold text-dark mb-2" style="font-family: 'Outfit', sans-serif;">Itemized Products & Line Items</h6>
-                <div class="table-responsive rounded-3 border mb-3">
-                    <table class="table table-sm align-middle mb-0" id="modalProductsTable">
-                        <thead style="background: #f8fafc;">
-                            <tr>
-                                <th class="py-2 px-3 small text-muted">Product / Description</th>
-                                <th class="py-2 px-3 small text-muted">Qty</th>
-                                <th class="py-2 px-3 small text-muted">Price</th>
-                                <th class="py-2 px-3 small text-muted text-end">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody id="modalProductsBody">
-                            <tr><td colspan="4" class="text-center py-3 text-muted small">No line items</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
                 <div class="mb-3">
                     <h6 class="fw-bold text-dark mb-1" style="font-family: 'Outfit', sans-serif;">Notes & Context</h6>
                     <p class="text-muted small mb-0" id="modalDealDesc">No notes provided.</p>
@@ -371,11 +596,185 @@ $winRate = (count($deals) > 0) ? round((count($wonDeals) / count($deals)) * 100,
 
 <script>
 let currentSelectedStage = 'all';
+let currentSelectedCurrencyFilter = 'ALL';
+
+function filterCurrencyDisplay(curr) {
+    currentSelectedCurrencyFilter = curr;
+    const allBtn = document.getElementById('currAllBtn');
+    const usdBtn = document.getElementById('currUsdBtn');
+    const ngnBtn = document.getElementById('currNgnBtn');
+
+    [allBtn, usdBtn, ngnBtn].forEach(btn => {
+        btn.classList.remove('btn-primary', 'active');
+        btn.classList.add('btn-light', 'text-secondary');
+    });
+
+    if (curr === 'USD') {
+        usdBtn.classList.add('btn-primary', 'active');
+        usdBtn.classList.remove('btn-light', 'text-secondary');
+    } else if (curr === 'NGN') {
+        ngnBtn.classList.add('btn-primary', 'active');
+        ngnBtn.classList.remove('btn-light', 'text-secondary');
+    } else {
+        allBtn.classList.add('btn-primary', 'active');
+        allBtn.classList.remove('btn-light', 'text-secondary');
+    }
+
+    filterDealsData();
+}
+
+function resetDealForm() {
+    document.getElementById('dealForm').reset();
+    document.getElementById('dealId').value = '';
+    document.getElementById('dealOffcanvasTitle').textContent = 'New Opportunity / Deal';
+}
+
+function saveDeal(e) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(document.getElementById('dealForm')).entries());
+    fetch('<?php echo BASE_URL; ?>/ajax/deals/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.success) {
+            showToast(res.message, 'success');
+            setTimeout(() => window.location.reload(), 600);
+        } else {
+            showToast(res.message || 'Save failed', 'danger');
+        }
+    })
+    .catch(err => showToast('Error processing request', 'danger'));
+}
+
+function editDeal(id) {
+    fetch('<?php echo BASE_URL; ?>/ajax/deals/get?id=' + id)
+    .then(res => res.json())
+    .then(res => {
+        if (res.success && res.data) {
+            const d = res.data;
+            document.getElementById('dealId').value = d.id;
+            document.getElementById('dealTitleInput').value = d.title || '';
+            document.getElementById('dealCustomerId').value = d.customer_id || '';
+            document.getElementById('dealLeadId').value = d.lead_id || '';
+            document.getElementById('dealValue').value = d.value || 0;
+            document.getElementById('dealCurrency').value = d.currency || 'USD';
+            document.getElementById('dealStage').value = d.stage || 'qualification';
+            document.getElementById('dealDueDate').value = d.due_date || '';
+            document.getElementById('dealValidUntil').value = d.valid_until || '';
+            document.getElementById('dealAssignedTo').value = d.assigned_to || '';
+            document.getElementById('dealDescription').value = d.description || '';
+            document.getElementById('dealTerms').value = d.terms_conditions || '';
+            document.getElementById('dealOffcanvasTitle').textContent = 'Edit Opportunity';
+            new bootstrap.Offcanvas(document.getElementById('dealOffcanvas')).show();
+        }
+    });
+}
+
+async function advanceDealStage(id, currentStage, dealTitle, dealValue, currencySymbol) {
+    const stageFlow = {
+        'qualification': { next: 'value_proposition', title: 'Value Proposition' },
+        'value_proposition': { next: 'proposal_quote', title: 'Proposal / Quote' },
+        'proposal_quote': { next: 'negotiation_review', title: 'Negotiation' },
+        'negotiation_review': { next: 'closed_won', title: 'Closed Won' }
+    };
+
+    const nextInfo = stageFlow[currentStage];
+    if (!nextInfo) return;
+
+    const confirmed = await window.appConfirm({
+        title: 'Advance Opportunity Stage',
+        message: `Are you sure you want to advance "${dealTitle}" to the next stage: ${nextInfo.title}?`,
+        confirmText: `Advance to ${nextInfo.title}`,
+        cancelText: 'Cancel',
+        isDanger: false
+    });
+
+    if (confirmed) {
+        executeStageUpdate(id, nextInfo.next);
+    }
+}
+
+async function markDealWon(id, dealTitle, dealValue, currencySymbol) {
+    const formattedVal = (currencySymbol || '$') + ' ' + parseFloat(dealValue).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const confirmed = await window.appConfirm({
+        title: 'Mark Opportunity as Closed Won',
+        message: `Are you sure you want to close "${dealTitle}" as WON (${formattedVal})?`,
+        confirmText: 'Yes, Mark Closed Won',
+        cancelText: 'Cancel',
+        isDanger: false
+    });
+
+    if (confirmed) {
+        executeStageUpdate(id, 'closed_won');
+    }
+}
+
+async function markDealLost(id, dealTitle) {
+    const confirmed = await window.appConfirm({
+        title: 'Mark Opportunity as Closed Lost',
+        message: `Are you sure you want to mark "${dealTitle}" as LOST?`,
+        confirmText: 'Yes, Mark Closed Lost',
+        cancelText: 'Cancel',
+        isDanger: true
+    });
+
+    if (confirmed) {
+        executeStageUpdate(id, 'closed_lost');
+    }
+}
+
+async function updateDealStage(id, targetStage, dealTitle) {
+    const stageTitles = {
+        'qualification': 'Qualification',
+        'value_proposition': 'Value Proposition',
+        'proposal_quote': 'Proposal / Quote',
+        'negotiation_review': 'Negotiation',
+        'closed_won': 'Closed Won',
+        'closed_lost': 'Closed Lost'
+    };
+
+    const targetTitle = stageTitles[targetStage] || targetStage;
+    const isDanger = (targetStage === 'closed_lost');
+
+    const confirmed = await window.appConfirm({
+        title: 'Move Opportunity Stage',
+        message: `Are you sure you want to move "${dealTitle || 'this opportunity'}" to stage: ${targetTitle}?`,
+        confirmText: `Move to ${targetTitle}`,
+        cancelText: 'Cancel',
+        isDanger: isDanger
+    });
+
+    if (confirmed) {
+        executeStageUpdate(id, targetStage);
+    }
+}
+
+function executeStageUpdate(id, stage) {
+    fetch('<?php echo BASE_URL; ?>/ajax/deals/stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deal_id: id, stage: stage })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.success) {
+            showToast(res.message || 'Stage updated successfully', 'success');
+            setTimeout(() => window.location.reload(), 600);
+        } else {
+            showToast(res.message || 'Failed to update stage', 'danger');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Server error updating stage', 'danger');
+    });
+}
 
 function selectStageTab(stage) {
     currentSelectedStage = stage;
-    
-    // Update Stepper Buttons Active Styling
     document.querySelectorAll('.stage-tab').forEach(btn => {
         if (btn.getAttribute('data-stage') === stage) {
             btn.classList.add('btn-primary', 'active');
@@ -389,21 +788,6 @@ function selectStageTab(stage) {
             if (titleSpan) titleSpan.classList.add('text-dark');
         }
     });
-
-    const labelMap = {
-        'all': 'All Stages',
-        'qualification': 'Qualification',
-        'value_proposition': 'Value Proposition',
-        'proposal_quote': 'Proposal / Quote',
-        'negotiation_review': 'Negotiation / Review',
-        'closed_won': 'Closed Won',
-        'closed_lost': 'Closed Lost'
-    };
-    
-    const activeLabel = document.getElementById('activeStageLabel');
-    if (activeLabel) {
-        activeLabel.innerHTML = 'Showing: <strong>' + (labelMap[stage] || stage) + '</strong>';
-    }
 
     filterDealsData();
 }
@@ -435,15 +819,16 @@ function filterDealsData() {
     const query = document.getElementById('dealSearchInput').value.toLowerCase().trim();
     let visibleCount = 0;
 
-    // Filter Grid Cards
     document.querySelectorAll('.deal-card-item').forEach(card => {
         const title = card.getAttribute('data-title') || '';
         const stage = card.getAttribute('data-stage') || '';
+        const curr = card.getAttribute('data-currency') || '';
 
         const matchesQuery = !query || title.includes(query);
         const matchesStage = (currentSelectedStage === 'all') || (stage === currentSelectedStage);
+        const matchesCurr = (currentSelectedCurrencyFilter === 'ALL') || (curr === currentSelectedCurrencyFilter);
 
-        if (matchesQuery && matchesStage) {
+        if (matchesQuery && matchesStage && matchesCurr) {
             card.style.display = 'block';
             visibleCount++;
         } else {
@@ -451,42 +836,20 @@ function filterDealsData() {
         }
     });
 
-    // Filter Table Rows
     document.querySelectorAll('.deal-table-row').forEach(row => {
         const title = row.getAttribute('data-title') || '';
         const stage = row.getAttribute('data-stage') || '';
+        const curr = row.getAttribute('data-currency') || '';
 
         const matchesQuery = !query || title.includes(query);
         const matchesStage = (currentSelectedStage === 'all') || (stage === currentSelectedStage);
+        const matchesCurr = (currentSelectedCurrencyFilter === 'ALL') || (curr === currentSelectedCurrencyFilter);
 
-        if (matchesQuery && matchesStage) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
+        row.style.display = (matchesQuery && matchesStage && matchesCurr) ? '' : 'none';
     });
 
-    const countRes = document.getElementById('dealCountResult');
-    if (countRes) {
-        countRes.textContent = 'Showing ' + visibleCount + ' opportunities';
-    }
-}
-
-function updateDealStage(dealId, newStage) {
-    fetch('<?php echo BASE_URL; ?>/ajax/deals/stage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deal_id: dealId, stage: newStage })
-    })
-    .then(res => res.json())
-    .then(res => {
-        if (res.success) {
-            showToast(res.message, 'success');
-            setTimeout(() => window.location.reload(), 600);
-        } else {
-            showToast(res.message, 'danger');
-        }
-    });
+    const resLabel = document.getElementById('dealCountResult');
+    if (resLabel) resLabel.textContent = 'Showing ' + visibleCount + ' opportunities';
 }
 
 function viewDealModal(id) {
@@ -495,27 +858,18 @@ function viewDealModal(id) {
     .then(res => {
         if (res.success && res.data) {
             const d = res.data;
-            document.getElementById('modalDealQuoteNum').textContent = d.quote_number || ('DEAL #' + d.id);
+            document.getElementById('modalDealQuoteNum').textContent = d.quote_number || 'QT-GENERIC';
             document.getElementById('modalDealTitle').textContent = d.title;
-            document.getElementById('modalDealValue').textContent = (d.currency || 'USD') + ' ' + parseFloat(d.value).toLocaleString('en-US', {minimumFractionDigits: 2});
-            document.getElementById('modalDealStage').textContent = d.stage.replace('_', ' ').toUpperCase();
-            document.getElementById('modalDealDueDate').textContent = d.due_date ? d.due_date : 'Not set';
-            document.getElementById('modalDealDesc').textContent = d.description || 'No additional notes.';
+            
+            const val = parseFloat(d.value || 0);
+            const curr = (d.currency || 'USD').toUpperCase();
+            const symbol = (curr.includes('NGN') || curr.includes('₦')) ? '₦' : '$';
 
-            const tbody = document.getElementById('modalProductsBody');
-            if (d.products && d.products.length > 0) {
-                tbody.innerHTML = d.products.map(p => `
-                    <tr>
-                        <td class="py-2 px-3 fw-medium">${p.product_name || 'Product'}<br><span class="text-muted small">${p.description || ''}</span></td>
-                        <td class="py-2 px-3">${p.quantity}</td>
-                        <td class="py-2 px-3">$${parseFloat(p.price).toFixed(2)}</td>
-                        <td class="py-2 px-3 text-end fw-bold">$${parseFloat(p.total).toFixed(2)}</td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted small">No line items attached</td></tr>';
-            }
-
+            document.getElementById('modalDealValue').textContent = symbol + ' ' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' (' + curr + ')';
+            document.getElementById('modalDealStage').textContent = d.stage ? d.stage.replace('_', ' ').toUpperCase() : 'QUALIFICATION';
+            document.getElementById('modalDealDueDate').textContent = d.due_date || '-';
+            document.getElementById('modalDealDesc').textContent = d.description || 'No description notes provided.';
+            
             new bootstrap.Modal(document.getElementById('dealDetailModal')).show();
         }
     });

@@ -15,7 +15,10 @@ require_once __DIR__ . '/includes/header.php';
 $totalLeads = $pdo->query("SELECT COUNT(*) FROM leads WHERE is_archived = 0")->fetchColumn();
 $dealsWon = $pdo->query("SELECT COUNT(*) FROM deals WHERE stage = 'closed_won' AND is_archived = 0")->fetchColumn();
 $pendingTasks = $pdo->query("SELECT COUNT(*) FROM tasks WHERE status != 'completed' AND is_archived = 0")->fetchColumn();
-$totalRevenue = $pdo->query("SELECT SUM(value) FROM deals WHERE stage = 'closed_won' AND is_archived = 0")->fetchColumn() ?: 0;
+
+// Native creation currency separation for Won Revenue
+$wonUsdRevenue = $pdo->query("SELECT SUM(value) FROM deals WHERE stage = 'closed_won' AND is_archived = 0 AND (UPPER(currency) = 'USD' OR currency = '$')")->fetchColumn() ?: 0;
+$wonNgnRevenue = $pdo->query("SELECT SUM(value) FROM deals WHERE stage = 'closed_won' AND is_archived = 0 AND (UPPER(currency) LIKE '%NGN%' OR currency = '₦')")->fetchColumn() ?: 0;
 
 // Chart 1: Lead Conversion Funnel Data
 $leadFunnelRaw = $pdo->query("SELECT status, COUNT(*) as count FROM leads WHERE is_archived = 0 GROUP BY status")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -100,7 +103,7 @@ $dealBadges = [
         </div>
     </div>
 
-    <!-- Stat Cards -->
+    <!-- Executive Stat Cards -->
     <div class="row g-3 mb-4">
         <div class="col-12 col-sm-6 col-xl-3">
             <?php renderStatCard('Total Leads', number_format($totalLeads), 'funnel', 'primary', 'Active prospects'); ?>
@@ -111,8 +114,36 @@ $dealBadges = [
         <div class="col-12 col-sm-6 col-xl-3">
             <?php renderStatCard('Pending Tasks', number_format($pendingTasks), 'list-check', 'info', 'Action items'); ?>
         </div>
+
+        <!-- Won Revenue Card with Vertical Line Split for USD and NGN -->
         <div class="col-12 col-sm-6 col-xl-3">
-            <?php renderStatCard('Won Revenue', 'USD ' . number_format($totalRevenue, 2), 'currency-dollar', 'warning', 'Cumulative value'); ?>
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100 p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-uppercase text-muted fw-bold small" style="font-size: 0.75rem;">Won Revenue</span>
+                    <div class="rounded-circle bg-light p-2 text-warning d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                        <i data-lucide="trophy" class="lucide-icon text-warning"></i>
+                    </div>
+                </div>
+                
+                <!-- Vertical Split Layout for USD and NGN -->
+                <div class="row g-0 align-items-center mt-2">
+                    <!-- Left Side: USD Won Revenue -->
+                    <div class="col-6 pe-2 border-end border-secondary-subtle">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">USD ($)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="$<?php echo number_format($wonUsdRevenue, 2); ?>">
+                            $<?php echo number_format($wonUsdRevenue, 2); ?>
+                        </span>
+                    </div>
+                    
+                    <!-- Right Side: NGN Won Revenue -->
+                    <div class="col-6 ps-3">
+                        <span class="text-muted small fw-medium d-block mb-1" style="font-size: 0.725rem;">NGN (₦)</span>
+                        <span class="fw-bold text-dark d-block text-truncate" style="font-family: 'Outfit', sans-serif; font-size: 1.05rem;" title="₦<?php echo number_format($wonNgnRevenue, 2); ?>">
+                            ₦<?php echo number_format($wonNgnRevenue, 2); ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -148,7 +179,7 @@ $dealBadges = [
             </div>
         </div>
 
-        <!-- 3. Leads by Source Chart -->
+        <!-- 3. Lead Source Breakdown Chart -->
         <div class="col-12 col-lg-4">
             <div class="card border-0 shadow-sm rounded-3 h-100">
                 <div class="card-header bg-white border-bottom p-3.5 d-flex align-items-center gap-2">
@@ -164,9 +195,9 @@ $dealBadges = [
         </div>
     </div>
 
-    <!-- Two-column Activity Summary Tables -->
-    <div class="row g-4">
-        <!-- Recent Inbound Leads Table -->
+    <!-- RECENT ACTIVITY TABLES: Recent Leads & Recent Deals -->
+    <div class="row g-4 mb-4">
+        <!-- Recent Leads Table -->
         <div class="col-12 col-lg-6">
             <div class="card border-0 shadow-sm rounded-3 h-100">
                 <div class="card-header bg-white border-bottom p-3.5 d-flex justify-content-between align-items-center">
@@ -174,7 +205,7 @@ $dealBadges = [
                         <i data-lucide="users" class="lucide-icon text-primary"></i>
                         <h6 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Recent Inbound Leads</h6>
                     </div>
-                    <a href="<?php echo BASE_URL; ?>/leads" class="btn btn-sm btn-light border rounded-pill px-3 text-secondary shadow-sm" style="font-size: 0.775rem;">View All</a>
+                    <a href="<?php echo BASE_URL; ?>/leads" class="btn btn-sm btn-light border rounded-pill px-3 text-secondary shadow-sm" style="font-size: 0.775rem;">View All Leads</a>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -241,10 +272,13 @@ $dealBadges = [
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($recentDeals as $rd): ?>
-                                        <?php $badge = $dealBadges[$rd['stage']] ?? 'badge-soft-secondary'; ?>
+                                        <?php 
+                                            $badge = $dealBadges[$rd['stage']] ?? 'badge-soft-secondary'; 
+                                            $currSymbol = (strpos(strtoupper($rd['currency']), 'NGN') !== false || strpos($rd['currency'], '₦') !== false) ? '₦' : '$';
+                                        ?>
                                         <tr>
                                             <td class="py-3 px-4 fw-semibold text-dark"><?php echo htmlspecialchars($rd['title']); ?></td>
-                                            <td class="py-3 px-4 fw-bold text-primary"><?php echo htmlspecialchars($rd['currency']) . ' ' . number_format($rd['value'], 2); ?></td>
+                                            <td class="py-3 px-4 fw-bold text-primary"><?php echo $currSymbol . ' ' . number_format($rd['value'], 2); ?></td>
                                             <td class="py-3 px-4"><span class="badge rounded-pill <?php echo $badge; ?>"><?php echo ucfirst(str_replace('_', ' ', $rd['stage'])); ?></span></td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -295,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
         data: {
             labels: <?php echo json_encode(array_keys($dealPipelineData)); ?>,
             datasets: [{
-                label: 'Pipeline Value ($)',
+                label: 'Pipeline Value',
                 data: <?php echo json_encode(array_values($dealPipelineData)); ?>,
                 backgroundColor: '#12b1b0',
                 borderRadius: 6
@@ -320,7 +354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // 3. Leads by Source Doughnut Chart
+    // 3. Lead Source Doughnut Chart
     const ctxSource = document.getElementById('leadSourceChart').getContext('2d');
     new Chart(ctxSource, {
         type: 'doughnut',
@@ -328,19 +362,18 @@ document.addEventListener('DOMContentLoaded', function() {
             labels: <?php echo json_encode($leadSourceLabels); ?>,
             datasets: [{
                 data: <?php echo json_encode($leadSourceCounts); ?>,
-                backgroundColor: ['#12b1b0', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#64748b']
+                backgroundColor: ['#12b1b0', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#64748b'],
+                borderWidth: 2,
+                borderColor: '#ffffff'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { 
-                    position: 'bottom',
-                    labels: { font: { family: fontFamily, size: 11 }, boxWidth: 12 }
-                }
+                legend: { position: 'bottom', labels: { font: { family: fontFamily, size: 11 }, boxWidth: 12 } }
             },
-            cutout: '65%'
+            cutout: '68%'
         }
     });
 });

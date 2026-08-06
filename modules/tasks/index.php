@@ -26,7 +26,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <div class="d-flex gap-2">
             <?php if (hasPermission('add_tasks')): ?>
-                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#taskModal" onclick="resetTaskForm()">
+                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="offcanvas" data-bs-target="#taskOffcanvas" onclick="resetTaskForm()">
                     <i data-lucide="plus" class="lucide-icon me-1"></i> New Task
                 </button>
             <?php endif; ?>
@@ -36,24 +36,24 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
     <!-- Quick Stats -->
     <div class="row g-3 mb-4">
         <div class="col-12 col-sm-6 col-xl-3">
-            <?php renderStatCard('Total Tasks', count($tasks), 'list-check', 'primary'); ?>
+            <?php renderStatCard('Total Tasks', count($tasks), 'check-square', 'primary'); ?>
         </div>
         <div class="col-12 col-sm-6 col-xl-3">
             <?php 
                 $pendingCount = count(array_filter($tasks, fn($t) => $t['status'] === 'pending'));
-                renderStatCard('Pending Action', $pendingCount, 'clock-history', 'warning', 'Due / Upcoming'); 
+                renderStatCard('Pending Action', $pendingCount, 'clock', 'warning', 'Due / Upcoming'); 
             ?>
         </div>
         <div class="col-12 col-sm-6 col-xl-3">
             <?php 
                 $completedCount = count(array_filter($tasks, fn($t) => $t['status'] === 'completed'));
-                renderStatCard('Completed Tasks', $completedCount, 'check-all', 'success'); 
+                renderStatCard('Completed Tasks', $completedCount, 'check-circle-2', 'success'); 
             ?>
         </div>
         <div class="col-12 col-sm-6 col-xl-3">
             <?php 
                 $highPriorityCount = count(array_filter($tasks, fn($t) => $t['priority'] === 'high' && $t['status'] !== 'completed'));
-                renderStatCard('High Priority', $highPriorityCount, 'exclamation-triangle', 'danger', 'Attention needed'); 
+                renderStatCard('High Priority', $highPriorityCount, 'alert-triangle', 'danger', 'Attention needed'); 
             ?>
         </div>
     </div>
@@ -144,72 +144,68 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
-<!-- Task Modal -->
-<div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-            <div class="modal-header border-0 pb-0 pt-4 px-4">
-                <h5 class="modal-title fw-bold text-dark" id="taskModalTitle" style="font-family: 'Outfit', sans-serif;">New Task</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="taskForm" onsubmit="saveTask(event)">
-                <div class="modal-body p-4">
-                    <input type="hidden" id="taskId" name="id">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold">Task Title</label>
-                            <input type="text" id="taskTitle" name="title" class="form-control" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Type</label>
-                            <select id="taskType" name="type" class="form-select">
-                                <option value="todo">To-Do</option>
-                                <option value="call">Call</option>
-                                <option value="email">Email</option>
-                                <option value="meeting">Meeting</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Priority</label>
-                            <select id="taskPriority" name="priority" class="form-select">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Due Date & Time</label>
-                            <input type="datetime-local" id="taskDueDate" name="due_date" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Assigned To</label>
-                            <select id="taskAssignedTo" name="assigned_to" class="form-select">
-                                <option value="">Select Staff</option>
-                                <?php foreach ($users as $u): ?>
-                                    <option value="<?php echo $u['id']; ?>"><?php echo htmlspecialchars($u['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold">Description / Notes</label>
-                            <textarea id="taskDescription" name="description" class="form-control" rows="2"></textarea>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-0 pb-4 px-4 gap-2">
-                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4">Save Task</button>
-                </div>
-            </form>
-        </div>
+<!-- 50% WIDTH OFFCANVAS SLIDER FOR NEW / EDIT TASK -->
+<div class="offcanvas offcanvas-end offcanvas-half" id="taskOffcanvas" tabindex="-1" aria-labelledby="taskOffcanvasLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title fw-bold text-dark" id="taskOffcanvasTitle" style="font-family: 'Outfit', sans-serif;">New Task & Activity</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
+    <form id="taskForm" onsubmit="saveTask(event)">
+        <div class="offcanvas-body p-4">
+            <input type="hidden" id="taskId" name="id">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Task Title <span class="text-danger">*</span></label>
+                    <input type="text" id="taskTitle" name="title" class="form-control" placeholder="e.g. Schedule demo call with Acme Inc" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Task Type</label>
+                    <select id="taskType" name="type" class="form-select">
+                        <option value="todo">To-Do</option>
+                        <option value="call">Call</option>
+                        <option value="email">Email</option>
+                        <option value="meeting">Meeting</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Priority Level</label>
+                    <select id="taskPriority" name="priority" class="form-select">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Due Date & Time</label>
+                    <input type="datetime-local" id="taskDueDate" name="due_date" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Assigned Staff</label>
+                    <select id="taskAssignedTo" name="assigned_to" class="form-select">
+                        <option value="">Select Staff</option>
+                        <?php foreach ($users as $u): ?>
+                            <option value="<?php echo $u['id']; ?>"><?php echo htmlspecialchars($u['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Description & Notes</label>
+                    <textarea id="taskDescription" name="description" class="form-control" rows="3" placeholder="Task notes and instructions..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="offcanvas-footer gap-2 d-flex justify-content-end">
+            <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="offcanvas">Cancel</button>
+            <button type="submit" class="btn btn-primary rounded-pill px-4">Save Task</button>
+        </div>
+    </form>
 </div>
 
 <script>
 function resetTaskForm() {
     document.getElementById('taskForm').reset();
     document.getElementById('taskId').value = '';
-    document.getElementById('taskModalTitle').textContent = 'New Task';
+    document.getElementById('taskOffcanvasTitle').textContent = 'New Task & Activity';
 }
 
 function saveTask(e) {
@@ -261,8 +257,8 @@ function editTask(id) {
             document.getElementById('taskDueDate').value = t.due_date ? t.due_date.replace(' ', 'T') : '';
             document.getElementById('taskAssignedTo').value = t.assigned_to || '';
             document.getElementById('taskDescription').value = t.description || '';
-            document.getElementById('taskModalTitle').textContent = 'Edit Task';
-            new bootstrap.Modal(document.getElementById('taskModal')).show();
+            document.getElementById('taskOffcanvasTitle').textContent = 'Edit Task';
+            new bootstrap.Offcanvas(document.getElementById('taskOffcanvas')).show();
         }
     });
 }

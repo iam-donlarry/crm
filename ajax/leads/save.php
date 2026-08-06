@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_id'])) sendResponse(false, 'Unauthorized');
 
 $input = getJsonInput();
-$id = $input['id'] ?? $_POST['id'] ?? null;
+$id = !empty($input['id'] ?? $_POST['id'] ?? null) ? intval($input['id'] ?? $_POST['id']) : null;
 
 if ($id) {
     if (!hasPermission('edit_leads')) sendResponse(false, 'Forbidden');
@@ -26,8 +26,12 @@ $source = $input['source'] ?? $_POST['source'] ?? '';
 $expectedValue = floatval($input['expected_value'] ?? $_POST['expected_value'] ?? 0);
 $currency = $input['currency'] ?? $_POST['currency'] ?? 'USD';
 $notes = trim($input['notes'] ?? $_POST['notes'] ?? '');
-$assignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? $_SESSION['user_id'];
-$customerId = $input['customer_id'] ?? $_POST['customer_id'] ?? null;
+
+$rawAssignedTo = $input['assigned_to'] ?? $_POST['assigned_to'] ?? null;
+$rawCustomerId = $input['customer_id'] ?? $_POST['customer_id'] ?? null;
+
+$assignedTo = !empty($rawAssignedTo) ? intval($rawAssignedTo) : $_SESSION['user_id'];
+$customerId = !empty($rawCustomerId) ? intval($rawCustomerId) : null;
 
 if (empty($firstName) && empty($company)) {
     sendResponse(false, 'First Name or Company Name is required');

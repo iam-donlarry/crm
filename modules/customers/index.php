@@ -29,7 +29,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <div class="d-flex gap-2">
             <?php if (hasPermission('add_customers')): ?>
-                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#customerModal" onclick="resetCustomerForm()">
+                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="offcanvas" data-bs-target="#customerOffcanvas" onclick="resetCustomerForm()">
                     <i data-lucide="plus" class="lucide-icon me-1"></i> Add Customer
                 </button>
             <?php endif; ?>
@@ -39,7 +39,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
     <!-- Quick Stats Row -->
     <div class="row g-3 mb-4">
         <div class="col-12 col-sm-6 col-xl-3">
-            <?php renderStatCard('Total Customers', count($customers), 'people', 'primary', 'Active database'); ?>
+            <?php renderStatCard('Total Customers', count($customers), 'users', 'primary', 'Active database'); ?>
         </div>
         <div class="col-12 col-sm-6 col-xl-3">
             <?php 
@@ -50,7 +50,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="col-12 col-sm-6 col-xl-3">
             <?php 
                 $individualCount = count($customers) - $corporateCount;
-                renderStatCard('Individual Clients', $individualCount, 'person', 'success', 'Direct contacts'); 
+                renderStatCard('Individual Clients', $individualCount, 'user', 'success', 'Direct contacts'); 
             ?>
         </div>
         <div class="col-12 col-sm-6 col-xl-3">
@@ -106,7 +106,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
                                                 <?php if (hasPermission('edit_customers')): ?>
                                                     <li>
                                                         <a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="editCustomer(<?php echo $c['id']; ?>); return false;">
-                                                            <i data-lucide="edit-3" class="lucide-icon text-muted"></i> Edit Customer
+                                                            <i data-lucide="edit-3" class="lucide-icon text-muted"></i> Edit Customer Details
                                                         </a>
                                                     </li>
                                                 <?php endif; ?>
@@ -127,90 +127,93 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
                     </tbody>
                 </table>
             </div>
+            <div class="card-footer bg-white border-top p-3" id="customersPagination"></div>
         </div>
     </div>
 </div>
 
-<!-- Customer Modal Form -->
-<div class="modal fade" id="customerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-            <div class="modal-header border-0 pb-0 pt-4 px-4">
-                <h5 class="modal-title fw-bold text-dark" id="customerModalTitle" style="font-family: 'Outfit', sans-serif;">Add New Customer</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="customerForm" onsubmit="saveCustomer(event)">
-                <div class="modal-body p-4">
-                    <input type="hidden" id="customerId" name="id">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">First Name</label>
-                            <input type="text" id="custFirstName" name="first_name" class="form-control" placeholder="John">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Last Name</label>
-                            <input type="text" id="custLastName" name="last_name" class="form-control" placeholder="Doe">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Company Name</label>
-                            <input type="text" id="custCompany" name="company" class="form-control" placeholder="Acme Inc">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Email Address</label>
-                            <input type="email" id="custEmail" name="email" class="form-control" placeholder="john@example.com">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Phone Number</label>
-                            <input type="text" id="custPhone" name="phone" class="form-control" placeholder="+234 ...">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Assigned Account Manager</label>
-                            <select id="custAssignedTo" name="assigned_to" class="form-select">
-                                <option value="">Select Staff</option>
-                                <?php foreach ($users as $u): ?>
-                                    <option value="<?php echo $u['id']; ?>"><?php echo htmlspecialchars($u['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold">Street Address</label>
-                            <textarea id="custAddress" name="address" class="form-control" rows="2"></textarea>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">City</label>
-                            <input type="text" id="custCity" name="city" class="form-control">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">State</label>
-                            <input type="text" id="custState" name="state" class="form-control">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Country</label>
-                            <input type="text" id="custCountry" name="country" class="form-control">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-0 pb-4 px-4 gap-2">
-                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4">Save Customer</button>
-                </div>
-            </form>
-        </div>
+<!-- 50% WIDTH OFFCANVAS SLIDER FOR NEW / EDIT CUSTOMER -->
+<div class="offcanvas offcanvas-end offcanvas-half" id="customerOffcanvas" tabindex="-1" aria-labelledby="customerOffcanvasLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title fw-bold text-dark" id="customerOffcanvasTitle" style="font-family: 'Outfit', sans-serif;">Add New Customer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
+    <form id="customerForm" onsubmit="saveCustomer(event)">
+        <div class="offcanvas-body p-4">
+            <input type="hidden" id="customerId" name="id">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">First Name</label>
+                    <input type="text" id="custFirstName" name="first_name" class="form-control" placeholder="John">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Last Name</label>
+                    <input type="text" id="custLastName" name="last_name" class="form-control" placeholder="Doe">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Company Name</label>
+                    <input type="text" id="custCompany" name="company" class="form-control" placeholder="Acme Inc">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Email Address</label>
+                    <input type="email" id="custEmail" name="email" class="form-control" placeholder="john@example.com">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Phone Number</label>
+                    <input type="text" id="custPhone" name="phone" class="form-control" placeholder="+234 ...">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Assigned Account Manager</label>
+                    <select id="custAssignedTo" name="assigned_to" class="form-select">
+                        <option value="">Select Staff</option>
+                        <?php foreach ($users as $u): ?>
+                            <option value="<?php echo $u['id']; ?>"><?php echo htmlspecialchars($u['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Street Address</label>
+                    <textarea id="custAddress" name="address" class="form-control" rows="2" placeholder="Street address..."></textarea>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold">City</label>
+                    <input type="text" id="custCity" name="city" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold">State</label>
+                    <input type="text" id="custState" name="state" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold">Postal / Zip Code</label>
+                    <input type="text" id="custZip" name="zip" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Country</label>
+                    <input type="text" id="custCountry" name="country" class="form-control" placeholder="e.g. Nigeria">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Internal Notes</label>
+                    <textarea id="custNotes" name="notes" class="form-control" rows="2" placeholder="Additional customer notes..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="offcanvas-footer gap-2 d-flex justify-content-end">
+            <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="offcanvas">Cancel</button>
+            <button type="submit" class="btn btn-primary rounded-pill px-4">Save Customer</button>
+        </div>
+    </form>
 </div>
 
 <script>
 function resetCustomerForm() {
     document.getElementById('customerForm').reset();
     document.getElementById('customerId').value = '';
-    document.getElementById('customerModalTitle').textContent = 'Add New Customer';
+    document.getElementById('customerOffcanvasTitle').textContent = 'Add New Customer';
 }
 
 function saveCustomer(e) {
     e.preventDefault();
-    const formData = new FormData(document.getElementById('customerForm'));
-    const data = Object.fromEntries(formData.entries());
-
+    const data = Object.fromEntries(new FormData(document.getElementById('customerForm')).entries());
     fetch('<?php echo BASE_URL; ?>/ajax/customers/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,16 +246,26 @@ function editCustomer(id) {
             document.getElementById('custAddress').value = c.address || '';
             document.getElementById('custCity').value = c.city || '';
             document.getElementById('custState').value = c.state || '';
+            document.getElementById('custZip').value = c.zip || '';
             document.getElementById('custCountry').value = c.country || '';
+            document.getElementById('custNotes').value = c.notes || '';
             document.getElementById('custAssignedTo').value = c.assigned_to || '';
-            document.getElementById('customerModalTitle').textContent = 'Edit Customer';
-            new bootstrap.Modal(document.getElementById('customerModal')).show();
+            document.getElementById('customerOffcanvasTitle').textContent = 'Edit Customer';
+            new bootstrap.Offcanvas(document.getElementById('customerOffcanvas')).show();
         }
     });
 }
 
-function archiveCustomer(id) {
-    if (!confirm('Are you sure you want to archive this customer?')) return;
+async function archiveCustomer(id) {
+    const confirmed = await window.appConfirm({
+        title: 'Archive Customer',
+        message: 'Are you sure you want to archive this customer account?',
+        confirmText: 'Yes, Archive Customer',
+        cancelText: 'Cancel',
+        isDanger: true
+    });
+    if (!confirmed) return;
+
     fetch('<?php echo BASE_URL; ?>/ajax/customers/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -269,13 +282,9 @@ function archiveCustomer(id) {
     });
 }
 
-function filterCustomers() {
-    const val = document.getElementById('searchFilter').value.toLowerCase();
-    const rows = document.querySelectorAll('#customersTable tbody tr');
-    rows.forEach(r => {
-        r.style.display = r.textContent.toLowerCase().includes(val) ? '' : 'none';
-    });
-}
+document.addEventListener('DOMContentLoaded', function() {
+    initTablePagination('customersTable', 'customersPagination', 'searchFilter', 25);
+});
 </script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

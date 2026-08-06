@@ -35,7 +35,7 @@ $adminCount = count(array_filter($users, fn($u) => strtolower($u['role_name'] ??
         </div>
         <div class="d-flex gap-2">
             <?php if (hasPermission('edit_users') || $_SESSION['user_role'] === 'admin'): ?>
-                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#userModal" onclick="resetUserForm()">
+                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="offcanvas" data-bs-target="#userOffcanvas" onclick="resetUserForm()">
                     <i data-lucide="user-plus" class="lucide-icon me-1"></i> Add Staff Member
                 </button>
             <?php endif; ?>
@@ -138,63 +138,59 @@ $adminCount = count(array_filter($users, fn($u) => strtolower($u['role_name'] ??
     </div>
 </div>
 
-<!-- User / Staff Modal -->
-<div class="modal fade" id="userModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-            <div class="modal-header border-0 pb-0 pt-4 px-4">
-                <h5 class="modal-title fw-bold text-dark" id="userModalTitle" style="font-family: 'Outfit', sans-serif;">Add New Staff Member</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="userForm" onsubmit="saveUser(event)">
-                <div class="modal-body p-4">
-                    <input type="hidden" id="usrId" name="id">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">First Name</label>
-                            <input type="text" id="usrFirstName" name="first_name" class="form-control" placeholder="John" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Last Name</label>
-                            <input type="text" id="usrLastName" name="last_name" class="form-control" placeholder="Doe" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Email Address</label>
-                            <input type="email" id="usrEmail" name="email" class="form-control" placeholder="john@company.com" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Phone Number</label>
-                            <input type="text" id="usrPhone" name="phone" class="form-control" placeholder="+234 ...">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Security Role</label>
-                            <select id="usrRoleId" name="role_id" class="form-select">
-                                <option value="">Select Security Role</option>
-                                <?php foreach ($roles as $r): ?>
-                                    <option value="<?php echo $r['id']; ?>"><?php echo htmlspecialchars($r['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Password <span class="text-muted fw-normal small">(Leave blank to keep unchanged when editing)</span></label>
-                            <input type="password" id="usrPassword" name="password" class="form-control" placeholder="••••••••">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-0 pb-4 px-4 gap-2">
-                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4">Save Staff Account</button>
-                </div>
-            </form>
-        </div>
+<!-- 50% WIDTH OFFCANVAS SLIDER FOR NEW / EDIT USER STAFF -->
+<div class="offcanvas offcanvas-end offcanvas-half" id="userOffcanvas" tabindex="-1" aria-labelledby="userOffcanvasLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title fw-bold text-dark" id="userOffcanvasTitle" style="font-family: 'Outfit', sans-serif;">Add New Staff Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
+    <form id="userForm" onsubmit="saveUser(event)">
+        <div class="offcanvas-body p-4">
+            <input type="hidden" id="usrId" name="id">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">First Name <span class="text-danger">*</span></label>
+                    <input type="text" id="usrFirstName" name="first_name" class="form-control" placeholder="John" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Last Name <span class="text-danger">*</span></label>
+                    <input type="text" id="usrLastName" name="last_name" class="form-control" placeholder="Doe" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Email Address <span class="text-danger">*</span></label>
+                    <input type="email" id="usrEmail" name="email" class="form-control" placeholder="john@company.com" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Phone Number</label>
+                    <input type="text" id="usrPhone" name="phone" class="form-control" placeholder="+234 ...">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Security Role</label>
+                    <select id="usrRoleId" name="role_id" class="form-select">
+                        <option value="">Select Security Role</option>
+                        <?php foreach ($roles as $r): ?>
+                            <option value="<?php echo $r['id']; ?>"><?php echo htmlspecialchars($r['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Password <span class="text-muted fw-normal small">(Leave blank if editing)</span></label>
+                    <input type="password" id="usrPassword" name="password" class="form-control" placeholder="••••••••">
+                </div>
+            </div>
+        </div>
+        <div class="offcanvas-footer gap-2 d-flex justify-content-end">
+            <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="offcanvas">Cancel</button>
+            <button type="submit" class="btn btn-primary rounded-pill px-4">Save Staff Account</button>
+        </div>
+    </form>
 </div>
 
 <script>
 function resetUserForm() {
     document.getElementById('userForm').reset();
     document.getElementById('usrId').value = '';
-    document.getElementById('userModalTitle').textContent = 'Add New Staff Member';
+    document.getElementById('userOffcanvasTitle').textContent = 'Add New Staff Member';
 }
 
 function saveUser(e) {
@@ -230,14 +226,22 @@ function editUser(id) {
             document.getElementById('usrPhone').value = u.phone || '';
             document.getElementById('usrRoleId').value = u.role_id || '';
             document.getElementById('usrPassword').value = '';
-            document.getElementById('userModalTitle').textContent = 'Edit Staff Member';
-            new bootstrap.Modal(document.getElementById('userModal')).show();
+            document.getElementById('userOffcanvasTitle').textContent = 'Edit Staff Member';
+            new bootstrap.Offcanvas(document.getElementById('userOffcanvas')).show();
         }
     });
 }
 
-function deactivateUser(id) {
-    if (!confirm('Are you sure you want to deactivate this staff account?')) return;
+async function deactivateUser(id) {
+    const confirmed = await window.appConfirm({
+        title: 'Deactivate Staff Account',
+        message: 'Are you sure you want to deactivate this staff account? The user will no longer be able to sign in.',
+        confirmText: 'Yes, Deactivate Account',
+        cancelText: 'Cancel',
+        isDanger: true
+    });
+    if (!confirmed) return;
+
     fetch('<?php echo BASE_URL; ?>/ajax/users/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
