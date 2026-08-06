@@ -30,6 +30,7 @@
     RewriteRule ^tasks/?$ modules/tasks/index.php [L]
     RewriteRule ^products/?$ modules/products/index.php [L]
     RewriteRule ^reports/?$ modules/reports/index.php [L]
+    RewriteRule ^notifications/?$ modules/notifications/index.php [L]
     RewriteRule ^settings/?$ modules/settings/index.php [L]
     RewriteRule ^users/?$ modules/users/index.php [L]
     RewriteRule ^profile/?$ modules/profile/index.php [L]

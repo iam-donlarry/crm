@@ -47,6 +47,11 @@ try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$title, $description, $type, $status, $priority, $dueDate, $relatedToType, $relatedToId, $assignedTo]);
         $newId = $pdo->lastInsertId();
+        
+        if ($assignedTo && $assignedTo != $_SESSION['user_id']) {
+            createNotification($pdo, $assignedTo, 'New Task Assigned', "You were assigned a new task: {$title}", '/crm/tasks', 'info', true);
+        }
+
         sendResponse(true, 'Task created successfully', ['id' => $newId]);
     }
 } catch (PDOException $e) {

@@ -52,7 +52,6 @@ function generateUniqueDisplayName($pdo, $firstName, $lastName, $company) {
 }
 
 function createOrUpdateCustomer($pdo, $customerId, $contactData, $addressData, $assignedTo = null) {
-    // If customerId is provided, update address
     if ($customerId) {
         $fields = [];
         $values = [];
@@ -69,12 +68,9 @@ function createOrUpdateCustomer($pdo, $customerId, $contactData, $addressData, $
             $stmt->execute($values);
         }
         return $customerId;
-    } 
-    // Otherwise create new customer
-    else {
-        // Validation: Need at least Name or Company
+    } else {
         if (empty($contactData['first_name']) && empty($contactData['company'])) {
-            return null; // Cannot create
+            return null;
         }
 
         $code = 'CUS-' . strtoupper(substr(uniqid(), -5));
@@ -100,4 +96,51 @@ function createOrUpdateCustomer($pdo, $customerId, $contactData, $addressData, $
         
         return $pdo->lastInsertId();
     }
+}
+
+/**
+ * Create In-App Notification and optionally dispatch Email Alert
+ */
+function createNotification($pdo, $userId, $title, $message, $link = null, $type = 'info', $sendEmail = true) {
+    if (empty($userId)) return false;
+
+    try {
+        $stmt = $pdo->prepare("INSERT INTO notifications (user_id, title, message, link, type, is_read) VALUES (?, ?, ?, ?, ?, 0)");
+        $stmt->execute([$userId, $title, $message, $link, $type]);
+
+        if ($sendEmail) {
+            require_once __DIR__ . '/mailer.php';
+            $userStmt = $pdo->prepare("SELECT email, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), name, email) as name FROM users WHERE id = ? AND is_archived = 0");
+            $userStmt->execute([$userId]);
+            $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($user && !empty($user['email'])) {
+                sendCRMEmailNotification($user['email'], $user['name'], $title, $title, '<p>' . nl2br(htmlspecialchars($message)) . '</p>', 'View in CRM', $link ?: '/crm/dashboard');
+            }
+        }
+        return true;
+    } catch (Exception $e) {
+        error_log("Failed to create notification: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get Unread Notification Count
+ */
+function getUnreadNotificationCount($pdo, $userId) {
+    if (empty($userId)) return 0;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0");
+    $stmt->execute([$userId]);
+    return $stmt->fetchColumn() ?: 0;
+}
+
+/**
+ * Fetch Recent User Notifications
+ */
+function getUserNotifications($pdo, $userId, $limit = 8) {
+    if (empty($userId)) return [];
+    $stmt = $pdo->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT " . intval($limit));
+    $stmt->execute([$userId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }

@@ -65,4 +65,12 @@ $error_msg   = getFlash('error');
         <i data-lucide="check-circle"></i> <span><?= htmlspecialchars($success_msg) ?></span>
     </div>
 <?php endif; ?>
+
+---
+
+# Database Migration & Schema Changes Rule
+
+Whenever any database schema modification (e.g. `CREATE TABLE`, `ALTER TABLE`, `ADD COLUMN`, `MODIFY COLUMN`) is executed or required by the system, you MUST ALWAYS:
+1. Save the exact SQL DDL migration statement as a timestamped/numbered `.sql` file in `database/migrations/` (e.g. `database/migrations/001_create_notifications_table.sql`).
+2. Ensure all SQL migration scripts are idempotent (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`) so they can be safely executed on production environments without breaking existing data.
 ```

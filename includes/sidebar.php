@@ -74,6 +74,12 @@ function isNavActive($path, $currentUri) {
                 <span class="sidebar-text">Performance Reports</span>
             </a>
         </li>
+        <li class="nav-item">
+            <a href="<?php echo BASE_URL; ?>/notifications" class="nav-link text-secondary d-flex align-items-center py-2.5 px-3.5 rounded-3 <?php echo isNavActive('/notifications', $currentUri) ? 'active' : ''; ?>">
+                <i data-lucide="bell" class="lucide-icon me-3"></i>
+                <span class="sidebar-text">Notifications Center</span>
+            </a>
+        </li>
 
         <?php if (hasPermission('view_settings') || hasPermission('view_users') || $userRole === 'admin'): ?>
             <li class="px-2 pt-4 pb-2 text-uppercase text-muted fw-bold sidebar-text" style="font-size: 0.675rem; letter-spacing: 0.08em;">

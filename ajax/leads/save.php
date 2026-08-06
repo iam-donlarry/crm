@@ -52,6 +52,11 @@ try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$customerId, $leadCode, $displayName, $firstName, $lastName, $email, $phone, $company, $status, $source, $expectedValue, $currency, $notes, $assignedTo, $createdBy]);
         $newId = $pdo->lastInsertId();
+        
+        if ($assignedTo && $assignedTo != $_SESSION['user_id']) {
+            createNotification($pdo, $assignedTo, 'New Lead Assigned', "You were assigned a new lead: {$displayName}", '/crm/leads', 'primary', true);
+        }
+
         sendResponse(true, 'Lead created successfully', ['id' => $newId]);
     }
 } catch (PDOException $e) {
