@@ -1,7 +1,7 @@
 # Centralized Apache URL Rewrite Rules for BBSL CRM
 <IfModule mod_rewrite.c>
+    Options -MultiViews
     RewriteEngine On
-    RewriteBase /crm/
 
     # Allow direct access to physical static files (images, css, js, etc.)
     RewriteCond %{REQUEST_FILENAME} -f [OR]
