@@ -121,6 +121,12 @@ $isDualCurrency = (intval($deal['is_dual_currency']) === 1 && floatval($deal['ex
 $secRate = floatval($deal['exchange_rate'] ?? 1);
 $secCode = ($currCode === 'USD') ? 'NGN' : 'USD';
 $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
+
+// Conversion Direction: Multiply if Primary is USD -> NGN, Divide if Primary is NGN -> USD
+$convertSec = function($val) use ($currCode, $secRate) {
+    if ($secRate <= 0) return $val;
+    return ($currCode === 'USD') ? ($val * $secRate) : ($val / $secRate);
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -192,7 +198,7 @@ $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
             border: 1px solid #e2e8f0;
             border-radius: 12px;
             box-shadow: 0 12px 35px rgba(0, 0, 0, 0.05);
-            padding: 40px 48px;
+            padding: 35px 35px;
             position: relative;
             box-sizing: border-box;
         }
@@ -256,25 +262,28 @@ $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
         .table-custom {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 16px;
+            margin-top: 14px;
+            table-layout: fixed;
         }
 
         .table-custom th {
             background-color: #f1f5f9;
             color: #334155;
-            font-size: 0.75rem;
+            font-size: 0.685rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 12px 16px;
+            letter-spacing: 0.03em;
+            padding: 8px 6px;
             border-bottom: 2px solid #cbd5e1;
+            word-wrap: break-word;
         }
 
         .table-custom td {
-            padding: 14px 16px;
+            padding: 9px 6px;
             border-bottom: 1px solid #e2e8f0;
-            font-size: 0.875rem;
+            font-size: 0.775rem;
             color: #1e293b;
+            word-wrap: break-word;
         }
 
         .grand-total-card {
@@ -456,15 +465,19 @@ $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
         <?php endif; ?>
 
         <!-- LINE ITEMS BREAKDOWN TABLE -->
-        <div class="table-responsive mb-4">
+        <div class="mb-4" style="overflow-x: hidden;">
             <table class="table-custom">
                 <thead>
                     <tr>
-                        <th style="width: 6%;" class="text-center">#</th>
-                        <th style="width: 44%;">Item / Product Description</th>
-                        <th style="width: 12%;" class="text-center">Qty</th>
-                        <th style="width: 18%;" class="text-end">Unit Price (<?php echo $currCode; ?>)</th>
-                        <th style="width: 20%;" class="text-end">Total Amount (<?php echo $currCode; ?>)</th>
+                        <th style="width: <?php echo $isDualCurrency ? '4%' : '5%'; ?>;" class="text-center">#</th>
+                        <th style="width: <?php echo $isDualCurrency ? '28%' : '47%'; ?>;">Item / Product Description</th>
+                        <th style="width: <?php echo $isDualCurrency ? '6%' : '8%'; ?>;" class="text-center">Qty</th>
+                        <th style="width: <?php echo $isDualCurrency ? '15%' : '20%'; ?>;" class="text-end">Unit Price (<?php echo $currCode; ?>)</th>
+                        <th style="width: <?php echo $isDualCurrency ? '16%' : '20%'; ?>;" class="text-end">Total (<?php echo $currCode; ?>)</th>
+                        <?php if ($isDualCurrency): ?>
+                            <th style="width: 15%;" class="text-end">Unit Price (<?php echo $secCode; ?>)</th>
+                            <th style="width: 16%;" class="text-end">Total (<?php echo $secCode; ?>)</th>
+                        <?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
@@ -479,14 +492,18 @@ $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
                             <tr>
                                 <td class="text-center text-muted fw-semibold"><?php echo $idx++; ?></td>
                                 <td>
-                                    <div class="fw-bold text-dark mb-0.5"><?php echo htmlspecialchars($prodTitle); ?></div>
+                                    <div class="fw-bold text-dark mb-0.5" style="font-size: 0.8rem;"><?php echo htmlspecialchars($prodTitle); ?></div>
                                     <?php if (!empty($item['description'])): ?>
-                                        <div class="text-muted small" style="font-size: 0.8rem;"><?php echo htmlspecialchars($item['description']); ?></div>
+                                        <div class="text-muted small" style="font-size: 0.725rem; line-height: 1.25;"><?php echo htmlspecialchars($item['description']); ?></div>
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-center fw-semibold"><?php echo $qty; ?></td>
                                 <td class="text-end mono-font" style="white-space: nowrap;"><?php echo $currSymbol . ' ' . number_format($price, 2); ?></td>
                                 <td class="text-end mono-font fw-bold text-dark" style="white-space: nowrap;"><?php echo $currSymbol . ' ' . number_format($itemTotal, 2); ?></td>
+                                <?php if ($isDualCurrency): ?>
+                                    <td class="text-end mono-font text-muted" style="white-space: nowrap;"><?php echo $secSymbol . ' ' . number_format($convertSec($price), 2); ?></td>
+                                    <td class="text-end mono-font fw-semibold text-secondary" style="white-space: nowrap;"><?php echo $secSymbol . ' ' . number_format($convertSec($itemTotal), 2); ?></td>
+                                <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
@@ -499,6 +516,10 @@ $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
                             <td class="text-center">1</td>
                             <td class="text-end mono-font" style="white-space: nowrap;"><?php echo $currSymbol . ' ' . number_format($dealValue, 2); ?></td>
                             <td class="text-end mono-font fw-bold text-dark" style="white-space: nowrap;"><?php echo $currSymbol . ' ' . number_format($dealValue, 2); ?></td>
+                            <?php if ($isDualCurrency): ?>
+                                <td class="text-end mono-font text-muted" style="white-space: nowrap;"><?php echo $secSymbol . ' ' . number_format($convertSec($dealValue), 2); ?></td>
+                                <td class="text-end mono-font fw-semibold text-secondary" style="white-space: nowrap;"><?php echo $secSymbol . ' ' . number_format($convertSec($dealValue), 2); ?></td>
+                            <?php endif; ?>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -525,11 +546,21 @@ $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
             <div class="info-card">
                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
                     <span class="text-muted small fw-medium">Subtotal</span>
-                    <span class="fw-bold mono-font text-dark"><?php echo $currSymbol . ' ' . number_format($subtotal, 2); ?></span>
+                    <div class="text-end">
+                        <span class="fw-bold mono-font text-dark d-block"><?php echo $currSymbol . ' ' . number_format($subtotal, 2); ?></span>
+                        <?php if ($isDualCurrency): ?>
+                            <span class="small mono-font text-muted d-block" style="font-size: 0.775rem;"><?php echo $secSymbol . ' ' . number_format($convertSec($subtotal), 2); ?> (<?php echo $secCode; ?>)</span>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                     <span class="text-muted small fw-medium">VAT (7.5%)</span>
-                    <span class="fw-semibold mono-font text-muted"><?php echo $currSymbol . ' ' . number_format($vatAmount, 2); ?></span>
+                    <div class="text-end">
+                        <span class="fw-semibold mono-font text-muted d-block"><?php echo $currSymbol . ' ' . number_format($vatAmount, 2); ?></span>
+                        <?php if ($isDualCurrency): ?>
+                            <span class="small mono-font text-muted d-block" style="font-size: 0.775rem;"><?php echo $secSymbol . ' ' . number_format($convertSec($vatAmount), 2); ?> (<?php echo $secCode; ?>)</span>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <!-- Grand Total (No background color) -->
@@ -538,20 +569,17 @@ $secSymbol = ($secCode === 'NGN') ? '₦' : '$';
                         <span class="text-uppercase small fw-bold text-dark d-block" style="font-size: 0.75rem; letter-spacing: 0.05em;">TOTAL AMOUNT DUE</span>
                         <span class="text-muted small d-block" style="font-size: 0.725rem;">Inclusive of VAT (7.5%)</span>
                     </div>
-                    <h3 class="fw-bold mono-font mb-0 text-end" style="font-size: 1.45rem; color: #12b1b0; white-space: nowrap;">
-                        <?php echo $currSymbol . ' ' . number_format($grandTotal, 2); ?>
-                    </h3>
-                </div>
-
-                <!-- Dual Currency Equivalent -->
-                <?php if ($isDualCurrency): ?>
-                    <div class="mt-3 pt-2 text-end text-muted small border-top" style="font-size: 0.775rem;">
-                        Secondary Currency Equivalent (<?php echo $secCode; ?> @ <?php echo number_format($secRate, 2); ?>):<br>
-                        <span class="fw-bold text-dark mono-font" style="font-size: 0.95rem;">
-                            <?php echo $secSymbol . ' ' . number_format($grandTotal * $secRate, 2); ?>
-                        </span>
+                    <div class="text-end">
+                        <h3 class="fw-bold mono-font mb-0" style="font-size: 1.45rem; color: #12b1b0; white-space: nowrap;">
+                            <?php echo $currSymbol . ' ' . number_format($grandTotal, 2); ?>
+                        </h3>
+                        <?php if ($isDualCurrency): ?>
+                            <div class="fw-bold mono-font text-secondary small" style="font-size: 0.9rem; white-space: nowrap;">
+                                <?php echo $secSymbol . ' ' . number_format($convertSec($grandTotal), 2); ?> (<?php echo $secCode; ?> @ <?php echo number_format($secRate, 2); ?>)
+                            </div>
+                        <?php endif; ?>
                     </div>
-                <?php endif; ?>
+                </div>
             </div>
         </div>
 

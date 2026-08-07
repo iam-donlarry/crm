@@ -2011,6 +2011,44 @@ function viewDealModal(id) {
                 pBar.textContent = progress + '%';
             }
 
+            const isDual = (parseInt(d.is_dual_currency) === 1 && parseFloat(d.exchange_rate) > 0);
+            const rate = isDual ? parseFloat(d.exchange_rate) : 1;
+            const secCurr = (curr.includes('USD') ? 'NGN' : 'USD');
+            const secSymbol = (secCurr === 'NGN' ? '₦' : '$');
+
+            const convertSecVal = (val) => {
+                if (!rate || rate <= 0) return val;
+                return curr.includes('USD') ? (val * rate) : (val / rate);
+            };
+
+            // Update Table Header for Dual Currency Mode
+            const thead = document.querySelector('#viewItemsTable thead');
+            if (thead) {
+                if (isDual) {
+                    thead.innerHTML = `
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Details</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-end">Unit Price (${curr})</th>
+                            <th class="text-end">Total (${curr})</th>
+                            <th class="text-end">Unit Price (${secCurr})</th>
+                            <th class="text-end">Total (${secCurr})</th>
+                        </tr>
+                    `;
+                } else {
+                    thead.innerHTML = `
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Details</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Total Amount</th>
+                        </tr>
+                    `;
+                }
+            }
+
             // Populate Line Items Breakdown Table
             const tbody = document.querySelector('#viewItemsTable tbody');
             tbody.innerHTML = '';
@@ -2026,29 +2064,67 @@ function viewDealModal(id) {
                     subtotal += total;
                     
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="fw-semibold text-dark">${escapeHtml(prodName)}</td>
-                        <td class="text-muted small">${escapeHtml(itemDesc)}</td>
-                        <td class="text-center">${qty}</td>
-                        <td class="text-end">${symbol} ${price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        <td class="text-end fw-bold">${symbol} ${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                    `;
+                    if (isDual) {
+                        const secPrice = convertSecVal(price);
+                        const secTotal = convertSecVal(total);
+                        tr.innerHTML = `
+                            <td class="fw-semibold text-dark">${escapeHtml(prodName)}</td>
+                            <td class="text-muted small">${escapeHtml(itemDesc)}</td>
+                            <td class="text-center">${qty}</td>
+                            <td class="text-end" style="white-space: nowrap;">${symbol} ${price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td class="text-end fw-bold" style="white-space: nowrap;">${symbol} ${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td class="text-end text-muted" style="white-space: nowrap;">${secSymbol} ${secPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td class="text-end fw-bold text-secondary" style="white-space: nowrap;">${secSymbol} ${secTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        `;
+                    } else {
+                        tr.innerHTML = `
+                            <td class="fw-semibold text-dark">${escapeHtml(prodName)}</td>
+                            <td class="text-muted small">${escapeHtml(itemDesc)}</td>
+                            <td class="text-center">${qty}</td>
+                            <td class="text-end" style="white-space: nowrap;">${symbol} ${price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td class="text-end fw-bold" style="white-space: nowrap;">${symbol} ${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        `;
+                    }
                     tbody.appendChild(tr);
                 });
             } else {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No line items breakdown recorded for this opportunity.</td></tr>`;
+                const colSpan = isDual ? 7 : 5;
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted py-3">No line items breakdown recorded for this opportunity.</td></tr>`;
             }
             
             const vat = subtotal * 0.075;
             const grandTotal = subtotal + vat;
+
+            // Footer colspan adjustment
+            const tfootColspan = isDual ? 6 : 4;
+            document.querySelectorAll('#viewItemsTable tfoot tr td:first-child').forEach(td => td.setAttribute('colspan', tfootColspan));
             
-            document.getElementById('viewSubtotalDisplay').textContent = symbol + ' ' + subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('viewVatDisplay').textContent = symbol + ' ' + vat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('viewTotalDisplay').textContent = symbol + ' ' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            if (isDual) {
+                const secSubtotal = convertSecVal(subtotal);
+                const secVat = convertSecVal(vat);
+                const secGrandTotal = convertSecVal(grandTotal);
+
+                document.getElementById('viewSubtotalDisplay').innerHTML = `
+                    <div>${symbol} ${subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <div class="small text-muted fw-normal" style="font-size: 0.8rem;">${secSymbol} ${secSubtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${secCurr})</div>
+                `;
+                document.getElementById('viewVatDisplay').innerHTML = `
+                    <div>${symbol} ${vat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <div class="small text-muted fw-normal" style="font-size: 0.8rem;">${secSymbol} ${secVat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${secCurr})</div>
+                `;
+                document.getElementById('viewTotalDisplay').innerHTML = `
+                    <div>${symbol} ${grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <div class="small text-secondary fw-semibold" style="font-size: 0.85rem;">${secSymbol} ${secGrandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${secCurr} @ ${rate.toFixed(2)})</div>
+                `;
+            } else {
+                document.getElementById('viewSubtotalDisplay').textContent = symbol + ' ' + subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('viewVatDisplay').textContent = symbol + ' ' + vat.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('viewTotalDisplay').textContent = symbol + ' ' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
             
             const dualInfo = document.getElementById('viewDualCurrencyInfo');
             if (dualInfo) {
-                if (parseInt(d.is_dual_currency) === 1) dualInfo.classList.remove('d-none');
+                if (isDual) dualInfo.classList.remove('d-none');
                 else dualInfo.classList.add('d-none');
             }
 

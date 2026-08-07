@@ -167,14 +167,14 @@ $totalStaffCount = array_sum(array_column($roles, 'user_count'));
     </div>
 </div>
 
-<!-- 50% WIDTH OFFCANVAS SLIDER FOR CREATE & EDIT ROLE (Takes half screen) -->
-<div class="offcanvas offcanvas-end" id="roleOffcanvas" tabindex="-1" aria-labelledby="roleOffcanvasLabel" data-bs-backdrop="true" data-bs-scroll="false" style="display: none; position: fixed; top: 0; right: 0; height: 100vh; width: 50%; max-width: 720px; z-index: 1080; overflow: auto; background: #fff;">
-    <div class="offcanvas-header border-bottom">
+<!-- 50% WIDTH OFFCANVAS SLIDER FOR CREATE & EDIT ROLE -->
+<div class="offcanvas offcanvas-end" id="roleOffcanvas" tabindex="-1" aria-labelledby="roleOffcanvasLabel" data-bs-backdrop="true" style="width: 50%; max-width: 720px; z-index: 1080;">
+    <div class="offcanvas-header border-bottom py-3 px-4" style="flex-shrink: 0;">
         <h5 class="offcanvas-title fw-bold text-dark" id="roleOffcanvasTitle" style="font-family: 'Outfit', sans-serif;">Create Security Role</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
-    <form id="roleForm" onsubmit="saveRole(event)">
-        <div class="offcanvas-body p-4">
+    <form id="roleForm" onsubmit="saveRole(event)" class="d-flex flex-column h-100 m-0" style="min-height: 0; flex: 1 1 auto; overflow: hidden;">
+        <div class="offcanvas-body p-4" style="flex: 1 1 auto; overflow-y: auto;">
             <input type="hidden" id="roleId" name="id">
 
             <!-- Basic Role Information -->
@@ -333,7 +333,7 @@ $totalStaffCount = array_sum(array_column($roles, 'user_count'));
             </script>
 
         </div>
-        <div class="offcanvas-footer border-top p-3 gap-2 d-flex justify-content-end bg-light">
+        <div class="offcanvas-footer border-top p-3 gap-2 d-flex justify-content-end bg-light" style="flex-shrink: 0;">
             <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="offcanvas">Cancel</button>
             <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm">Save Security Role</button>
         </div>
@@ -371,7 +371,6 @@ function openCreateRoleModal() {
     if (typeof renderPermissionMatrix === 'function') renderPermissionMatrix();
 
     const offcanvasEl = document.getElementById('roleOffcanvas');
-    offcanvasEl.style.display = 'flex';
     const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
     bsOffcanvas.show();
 }
@@ -435,7 +434,6 @@ function editRole(id) {
                 if (typeof renderPermissionMatrix === 'function') renderPermissionMatrix();
 
                 const offcanvasEl = document.getElementById('roleOffcanvas');
-                offcanvasEl.style.display = 'flex';
                 const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
                 bsOffcanvas.show();
             } else {
