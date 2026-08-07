@@ -22,7 +22,17 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <h2 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Products & Services Catalog</h2>
             <p class="text-muted small mb-0">Manage items, pricing, inventory stock, and catalog categories.</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <?php if (hasPermission('download_products_template')): ?>
+                <a href="<?php echo BASE_URL; ?>/assets/templates/products_template.csv" class="btn btn-outline-secondary rounded-pill px-3 shadow-sm" download>
+                    <i data-lucide="download" class="lucide-icon me-1"></i> Template
+                </a>
+            <?php endif; ?>
+            <?php if (hasPermission('export_products')): ?>
+                <button type="button" class="btn btn-outline-primary rounded-pill px-3 shadow-sm" onclick="exportTableToCSV('productsTable', 'products_export.csv')">
+                    <i data-lucide="download-cloud" class="lucide-icon me-1"></i> Export CSV
+                </button>
+            <?php endif; ?>
             <?php if (hasPermission('add_products')): ?>
                 <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="offcanvas" data-bs-target="#productOffcanvas" onclick="resetProductForm()">
                     <i data-lucide="plus" class="lucide-icon me-1"></i> Add Product
@@ -114,7 +124,7 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         </a>
                                                     </li>
                                                 <?php endif; ?>
-                                                <?php if (hasPermission('delete_products')): ?>
+                                                <?php if (hasPermission('archive_products') || hasPermission('delete_products')): ?>
                                                     <li><hr class="dropdown-divider my-1"></li>
                                                     <li>
                                                         <a class="dropdown-item py-2 text-danger d-flex align-items-center gap-2" href="#" onclick="archiveProduct(<?php echo $p['id']; ?>); return false;">

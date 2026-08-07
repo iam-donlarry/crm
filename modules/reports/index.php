@@ -4,8 +4,8 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/utils.php';
 
 if (session_status() === PHP_SESSION_NONE) session_start();
-if (!isset($_SESSION['user_id'])) {
-    header("Location: " . BASE_URL . "/login");
+if (!hasPermission('view_reports') && !hasPermission('view_statistics')) {
+    header("Location: " . BASE_URL . "/dashboard");
     exit();
 }
 

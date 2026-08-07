@@ -3,10 +3,7 @@ require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/utils.php';
 
-if (!hasPermission('view_users') && $_SESSION['user_role'] !== 'admin') {
-    header("Location: " . BASE_URL . "/dashboard");
-    exit();
-}
+requirePermission('view_users');
 
 require_once __DIR__ . '/../../includes/header.php';
 
@@ -34,7 +31,7 @@ $adminCount = count(array_filter($users, fn($u) => strtolower($u['role_name'] ??
             <p class="text-muted small mb-0">Manage employee accounts, security roles, and system access rights.</p>
         </div>
         <div class="d-flex gap-2">
-            <?php if (hasPermission('edit_users') || $_SESSION['user_role'] === 'admin'): ?>
+            <?php if (hasPermission('add_users')): ?>
                 <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="offcanvas" data-bs-target="#userOffcanvas" onclick="resetUserForm()">
                     <i data-lucide="user-plus" class="lucide-icon me-1"></i> Add Staff Member
                 </button>
@@ -110,14 +107,14 @@ $adminCount = count(array_filter($users, fn($u) => strtolower($u['role_name'] ??
                                                 Actions
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 text-small">
-                                                <?php if (hasPermission('edit_users') || $_SESSION['user_role'] === 'admin'): ?>
+                                                <?php if (hasPermission('edit_users')): ?>
                                                     <li>
                                                         <a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="editUser(<?php echo $u['id']; ?>); return false;">
                                                             <i data-lucide="edit-3" class="lucide-icon text-muted"></i> Edit Account / Role
                                                         </a>
                                                     </li>
                                                 <?php endif; ?>
-                                                <?php if ($_SESSION['user_role'] === 'admin' && intval($u['id']) !== intval($_SESSION['user_id'])): ?>
+                                                <?php if (hasPermission('archive_users') && intval($u['id']) !== intval($_SESSION['user_id'])): ?>
                                                     <li><hr class="dropdown-divider my-1"></li>
                                                     <li>
                                                         <a class="dropdown-item py-2 text-danger d-flex align-items-center gap-2" href="#" onclick="deactivateUser(<?php echo $u['id']; ?>); return false;">

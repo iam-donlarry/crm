@@ -7,7 +7,7 @@ header('Content-Type: application/json');
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_id'])) sendResponse(false, 'Unauthorized');
 
-if (!hasPermission('edit_tasks')) sendResponse(false, 'Forbidden');
+if (!hasPermission('edit_activities') && !hasPermission('edit_tasks')) sendResponse(false, 'Forbidden');
 
 $input = getJsonInput();
 $taskId = $input['task_id'] ?? $_POST['task_id'] ?? null;

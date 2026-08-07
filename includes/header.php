@@ -137,22 +137,43 @@ require_once __DIR__ . '/../components/pagination.php';
             z-index: 1200 !important;
             border-left: 1px solid var(--border-color);
             box-shadow: -10px 0 30px rgba(0, 0, 0, 0.15);
+            display: flex !important;
+            flex-direction: column !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            overflow: hidden !important;
+        }
+
+        /* Scrollable body — the flex child that grows and scrolls */
+        .offcanvas > .offcanvas-body,
+        .offcanvas-body {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch;
+            padding: 1.5rem !important;
         }
 
         .offcanvas-backdrop {
             z-index: 1150 !important;
         }
 
-        .offcanvas-header {
+        /* Default header — only applies when no inline style overrides */
+        .offcanvas-header:not([style]) {
             background-color: #ffffff;
+        }
+        .offcanvas-header {
             border-bottom: 1px solid var(--border-color);
             padding: 1.25rem 1.5rem;
+            flex-shrink: 0 !important;
         }
 
         .offcanvas-footer {
             background-color: #ffffff;
             border-top: 1px solid var(--border-color);
             padding: 1.25rem 1.5rem;
+            flex-shrink: 0 !important;
         }
 
         @media (max-width: 768px) {

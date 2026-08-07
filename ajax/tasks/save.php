@@ -11,9 +11,9 @@ $input = getJsonInput();
 $id = !empty($input['id'] ?? $_POST['id'] ?? null) ? intval($input['id'] ?? $_POST['id']) : null;
 
 if ($id) {
-    if (!hasPermission('edit_tasks')) sendResponse(false, 'Forbidden');
+    if (!hasPermission('edit_activities') && !hasPermission('edit_tasks')) sendResponse(false, 'Forbidden');
 } else {
-    if (!hasPermission('add_tasks')) sendResponse(false, 'Forbidden');
+    if (!hasPermission('add_activities') && !hasPermission('add_tasks')) sendResponse(false, 'Forbidden');
 }
 
 $title = trim($input['title'] ?? $_POST['title'] ?? '');

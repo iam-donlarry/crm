@@ -10,13 +10,14 @@ if (!hasPermission('view_leads')) {
 
 require_once __DIR__ . '/../../includes/header.php';
 
-// Fetch initial lead data with robust user name selection
+// Fetch initial lead data with data ownership scoping
+$leadScope = getRecordScopeCondition('l.assigned_to', 'view_team_leads');
 $stmt = $pdo->query("
     SELECT l.*, 
            COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.name, u.email) as assigned_to_name 
     FROM leads l 
     LEFT JOIN users u ON l.assigned_to = u.id 
-    WHERE l.is_archived = 0 
+    WHERE l.is_archived = 0 AND {$leadScope}
     ORDER BY l.created_at DESC
 ");
 $leads = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -34,7 +35,17 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
             <h2 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Inbound Leads Directory</h2>
             <p class="text-muted small mb-0">Capture, track, and convert sales prospects into active pipeline opportunities.</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <?php if (hasPermission('download_leads_template')): ?>
+                <a href="<?php echo BASE_URL; ?>/assets/templates/leads_template.csv" class="btn btn-outline-secondary rounded-pill px-3 shadow-sm" download>
+                    <i data-lucide="download" class="lucide-icon me-1"></i> Template
+                </a>
+            <?php endif; ?>
+            <?php if (hasPermission('export_leads')): ?>
+                <button type="button" class="btn btn-outline-primary rounded-pill px-3 shadow-sm" onclick="exportTableToCSV('leadsTable', 'leads_export.csv')">
+                    <i data-lucide="download-cloud" class="lucide-icon me-1"></i> Export CSV
+                </button>
+            <?php endif; ?>
             <?php if (hasPermission('add_leads')): ?>
                 <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="offcanvas" data-bs-target="#leadOffcanvas" onclick="resetLeadForm()">
                     <i data-lucide="plus" class="lucide-icon me-1"></i> Add Lead
@@ -138,7 +149,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
                                                         </a>
                                                     </li>
                                                 <?php endif; ?>
-                                                <?php if (hasPermission('delete_leads')): ?>
+                                                <?php if (hasPermission('archive_leads') || hasPermission('delete_leads')): ?>
                                                     <li><hr class="dropdown-divider my-1"></li>
                                                     <li>
                                                         <a class="dropdown-item py-2 text-danger d-flex align-items-center gap-2" href="#" onclick="archiveLead(<?php echo $l['id']; ?>); return false;">

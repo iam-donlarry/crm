@@ -7,7 +7,7 @@ header('Content-Type: application/json');
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_id'])) sendResponse(false, 'Unauthorized');
 
-if (!hasPermission('edit_deals')) sendResponse(false, 'Forbidden');
+if (!hasPermission('edit_deals') && !hasPermission('edit_team_deals')) sendResponse(false, 'Forbidden');
 
 $input = getJsonInput();
 $dealId = $input['deal_id'] ?? $_POST['deal_id'] ?? null;
@@ -39,7 +39,7 @@ try {
 
     if ($deal['assigned_to']) {
         if ($stage === 'closed_won') {
-            createNotification($pdo, $deal['assigned_to'], '🎉 Deal Won!', "Opportunity '{$deal['title']}' ({$formattedVal}) has been marked Closed Won!", '/crm/deals', 'success', true);
+            createNotification($pdo, $deal['assigned_to'], 'Deal Won!', "Opportunity '{$deal['title']}' ({$formattedVal}) has been marked Closed Won!", '/crm/deals', 'success', true);
         } else if ($stage === 'closed_lost') {
             createNotification($pdo, $deal['assigned_to'], 'Deal Marked Closed Lost', "Opportunity '{$deal['title']}' was marked Closed Lost.", '/crm/deals', 'warning', true);
         } else {

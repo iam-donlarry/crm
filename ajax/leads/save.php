@@ -33,6 +33,10 @@ $rawCustomerId = $input['customer_id'] ?? $_POST['customer_id'] ?? null;
 $assignedTo = !empty($rawAssignedTo) ? intval($rawAssignedTo) : $_SESSION['user_id'];
 $customerId = !empty($rawCustomerId) ? intval($rawCustomerId) : null;
 
+if ($assignedTo !== intval($_SESSION['user_id']) && !hasPermission('assign_leads')) {
+    sendResponse(false, 'Forbidden: Missing permission to assign leads to other staff');
+}
+
 if (empty($firstName) && empty($company)) {
     sendResponse(false, 'First Name or Company Name is required');
 }

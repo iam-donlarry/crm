@@ -3,14 +3,15 @@ require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/utils.php';
 
-if (!hasPermission('view_tasks')) {
+if (!hasPermission('view_activities') && !hasPermission('view_tasks')) {
     header("Location: " . BASE_URL . "/dashboard");
     exit();
 }
 
 require_once __DIR__ . '/../../includes/header.php';
 
-$stmt = $pdo->query("SELECT t.*, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.name, u.email) as assigned_to_name FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id WHERE t.is_archived = 0 ORDER BY t.due_date ASC");
+$taskScope = getRecordScopeCondition('t.assigned_to', 'system_admin');
+$stmt = $pdo->query("SELECT t.*, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.name, u.email) as assigned_to_name FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id WHERE t.is_archived = 0 AND {$taskScope} ORDER BY t.due_date ASC");
 $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $userStmt = $pdo->query("SELECT id, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), name, email) as name FROM users WHERE is_archived = 0 ORDER BY name ASC");
@@ -24,8 +25,18 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
             <h2 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Tasks & Follow-ups</h2>
             <p class="text-muted small mb-0">Schedule activities, calls, emails, and upcoming todos.</p>
         </div>
-        <div class="d-flex gap-2">
-            <?php if (hasPermission('add_tasks')): ?>
+        <div class="d-flex gap-2 flex-wrap">
+            <?php if (hasPermission('download_tasks_template')): ?>
+                <a href="<?php echo BASE_URL; ?>/assets/templates/tasks_template.csv" class="btn btn-outline-secondary rounded-pill px-3 shadow-sm" download>
+                    <i data-lucide="download" class="lucide-icon me-1"></i> Template
+                </a>
+            <?php endif; ?>
+            <?php if (hasPermission('export_tasks')): ?>
+                <button type="button" class="btn btn-outline-primary rounded-pill px-3 shadow-sm" onclick="exportTableToCSV('tasksTable', 'tasks_export.csv')">
+                    <i data-lucide="download-cloud" class="lucide-icon me-1"></i> Export CSV
+                </button>
+            <?php endif; ?>
+            <?php if (hasPermission('add_activities') || hasPermission('add_tasks')): ?>
                 <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="offcanvas" data-bs-target="#taskOffcanvas" onclick="resetTaskForm()">
                     <i data-lucide="plus" class="lucide-icon me-1"></i> New Task
                 </button>
@@ -123,7 +134,7 @@ $users = $userStmt->fetchAll(PDO::FETCH_ASSOC);
                                                         </a>
                                                     </li>
                                                 <?php endif; ?>
-                                                <?php if (hasPermission('edit_tasks')): ?>
+                                                <?php if (hasPermission('edit_activities') || hasPermission('edit_tasks')): ?>
                                                     <li><hr class="dropdown-divider my-1"></li>
                                                     <li>
                                                         <a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="editTask(<?php echo $t['id']; ?>); return false;">

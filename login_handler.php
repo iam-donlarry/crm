@@ -38,15 +38,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updateStmt->execute([$newHash, $user['id']]);
             }
 
-            // Resolve permission IDs to Slugs
+            // Resolve permission Slugs via role_permissions junction table or JSON fallback
             $permissionSlugs = [];
-            $permIds = !empty($user['permissions']) ? json_decode($user['permissions'], true) : [];
-            
-            if (!empty($permIds)) {
-                $placeholders = str_repeat('?,', count($permIds) - 1) . '?';
-                $permStmt = $pdo->prepare("SELECT slug FROM permissions WHERE id IN ($placeholders)");
-                $permStmt->execute($permIds);
-                $permissionSlugs = $permStmt->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($user['role_id'])) {
+                try {
+                    $rpStmt = $pdo->prepare("
+                        SELECT p.slug 
+                        FROM role_permissions rp 
+                        JOIN permissions p ON rp.permission_id = p.id 
+                        WHERE rp.role_id = ?
+                    ");
+                    $rpStmt->execute([$user['role_id']]);
+                    $permissionSlugs = $rpStmt->fetchAll(PDO::FETCH_COLUMN);
+                } catch (PDOException $e) {
+                    // Fallback to legacy JSON array if role_permissions table does not exist or fails
+                    $permissionSlugs = [];
+                }
+            }
+
+            // Fallback to legacy JSON string if role_permissions produced no result
+            if (empty($permissionSlugs) && !empty($user['permissions'])) {
+                $permIds = json_decode($user['permissions'], true) ?: [];
+                if (!empty($permIds)) {
+                    $placeholders = str_repeat('?,', count($permIds) - 1) . '?';
+                    $permStmt = $pdo->prepare("SELECT slug FROM permissions WHERE id IN ($placeholders)");
+                    $permStmt->execute($permIds);
+                    $permissionSlugs = $permStmt->fetchAll(PDO::FETCH_COLUMN);
+                }
             }
 
             // Set Session

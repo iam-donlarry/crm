@@ -3,10 +3,7 @@ require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/utils.php';
 
-if (!hasPermission('view_settings') && $_SESSION['user_role'] !== 'admin') {
-    header("Location: " . BASE_URL . "/dashboard");
-    exit();
-}
+requirePermission('view_settings');
 
 require_once __DIR__ . '/../../includes/header.php';
 
@@ -152,29 +149,32 @@ $permissions = $pdo->query("SELECT * FROM permissions ORDER BY category, name AS
 
                 <!-- TAB 3: SECURITY ROLES & ACCESS CONTROL -->
                 <div class="tab-pane fade" id="roles-panel" role="tabpanel">
-                    <h5 class="fw-bold text-dark mb-1" style="font-family: 'Outfit', sans-serif;">Configured Security Roles</h5>
-                    <p class="text-muted small mb-4">Security permission hierarchies mapped to staff accounts.</p>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Configured Security Roles</h5>
+                            <p class="text-muted small mb-0">Role hierarchies and access permissions managed in dedicated Roles & Permissions module.</p>
+                        </div>
+                        <a href="<?php echo BASE_URL; ?>/roles" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                            <i data-lucide="external-link" class="lucide-icon me-1"></i> Open Roles & Permissions Workspace
+                        </a>
+                    </div>
 
                     <div class="row g-3">
                         <?php foreach ($roles as $r): ?>
                             <div class="col-12 col-md-6">
-                                <div class="p-3.5 bg-light rounded-3 border h-100">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div class="fw-bold text-dark fs-6" style="font-family: 'Outfit', sans-serif;">
-                                            <i data-lucide="shield-check" class="lucide-icon text-primary me-1"></i>
-                                            <?php echo htmlspecialchars($r['name']); ?>
+                                <div class="p-3.5 bg-light rounded-3 border h-100 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <div class="fw-bold text-dark fs-6" style="font-family: 'Outfit', sans-serif;">
+                                                <i data-lucide="shield-check" class="lucide-icon text-primary me-1"></i>
+                                                <?php echo htmlspecialchars($r['name']); ?>
+                                            </div>
+                                            <span class="badge badge-soft-primary rounded-pill">Role ID: <?php echo $r['id']; ?></span>
                                         </div>
-                                        <span class="badge badge-soft-primary rounded-pill">Role ID: <?php echo $r['id']; ?></span>
+                                        <p class="text-muted small mb-3"><?php echo htmlspecialchars($r['description'] ?: 'Access permissions for ' . $r['name']); ?></p>
                                     </div>
-                                    <p class="text-muted small mb-3"><?php echo htmlspecialchars($r['description'] ?: 'Access permissions for ' . $r['name']); ?></p>
-
-                                    <div class="d-flex flex-wrap gap-1">
-                                        <?php if (strtolower($r['name']) === 'admin' || strtolower($r['name']) === 'system administrator'): ?>
-                                            <span class="badge badge-soft-success rounded-pill px-2.5 py-1">Full System Control</span>
-                                        <?php else: ?>
-                                            <span class="badge badge-soft-info rounded-pill px-2.5 py-1">Leads & Deals View</span>
-                                            <span class="badge badge-soft-info rounded-pill px-2.5 py-1">Tasks Management</span>
-                                        <?php endif; ?>
+                                    <div class="pt-2 border-top d-flex justify-content-end">
+                                        <a href="<?php echo BASE_URL; ?>/roles" class="btn btn-sm btn-outline-primary rounded-pill px-3">Configure Permissions</a>
                                     </div>
                                 </div>
                             </div>
