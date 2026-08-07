@@ -12,6 +12,12 @@ $id = !empty($input['id'] ?? $_POST['id'] ?? null) ? intval($input['id'] ?? $_PO
 
 if ($id) {
     if (!hasPermission('edit_deals') && !hasPermission('edit_team_deals')) sendResponse(false, 'Forbidden');
+    $checkStmt = $pdo->prepare("SELECT stage FROM deals WHERE id = ?");
+    $checkStmt->execute([$id]);
+    $existingStage = $checkStmt->fetchColumn();
+    if (in_array($existingStage, ['closed_won', 'closed_lost'])) {
+        sendResponse(false, 'Closed deals cannot be modified.');
+    }
 } else {
     if (!hasPermission('create_deals')) sendResponse(false, 'Forbidden');
 }

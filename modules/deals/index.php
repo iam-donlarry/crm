@@ -286,8 +286,9 @@ $nextStageMap = [
                     $ownerName = $d['assigned_to_name'] ?: 'Unassigned';
                     $stageInfo = $stages[$d['stage']] ?? ['title' => ucfirst($d['stage']), 'badge' => 'badge-soft-secondary', 'color' => '#64748b'];
                     $dueDateText = $d['due_date'] ? date('M j, Y', strtotime($d['due_date'])) : null;
-                    $isOverdue = ($d['due_date'] && strtotime($d['due_date']) < time() && !in_array($d['stage'], ['closed_won', 'closed_lost']));
-                    $hasNextStage = isset($nextStageMap[$d['stage']]);
+                    $isClosed = in_array($d['stage'], ['closed_won', 'closed_lost']);
+                    $isOverdue = ($d['due_date'] && strtotime($d['due_date']) < time() && !$isClosed);
+                    $hasNextStage = isset($nextStageMap[$d['stage']]) && !$isClosed;
                     $nextStageObj = $nextStageMap[$d['stage']] ?? null;
                     $currBadgeClass = ($d['native_currency'] === 'NGN') ? 'badge-soft-info' : 'badge-soft-primary';
                 ?>
@@ -379,10 +380,15 @@ $nextStageMap = [
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 text-small">
                                         <li><a class="dropdown-item py-2" href="#" onclick="viewDealModal(<?php echo $d['id']; ?>); return false;"><i data-lucide="eye" class="lucide-icon me-2"></i> View Details</a></li>
-                                        <?php if (hasPermission('edit_deals')): ?>
-                                            <li><a class="dropdown-item py-2" href="#" onclick="editDeal(<?php echo $d['id']; ?>); return false;"><i data-lucide="edit-3" class="lucide-icon me-2"></i> Edit Deal</a></li>
+                                        <li><hr class="dropdown-divider my-1"></li>
+                                        <li class="dropdown-header small text-muted">Print Client Documents</li>
+                                        <li><a class="dropdown-item py-1.5 small text-primary" href="<?php echo BASE_URL; ?>/modules/deals/print.php?id=<?php echo $d['id']; ?>&type=quote" target="_blank"><i data-lucide="printer" class="lucide-icon me-2"></i> Official Quotation</a></li>
+                                        <li><a class="dropdown-item py-1.5 small text-success" href="<?php echo BASE_URL; ?>/modules/deals/print.php?id=<?php echo $d['id']; ?>&type=invoice" target="_blank"><i data-lucide="file-text" class="lucide-icon me-2"></i> Commercial Invoice</a></li>
+                                        <li><a class="dropdown-item py-1.5 small text-info" href="<?php echo BASE_URL; ?>/modules/deals/print.php?id=<?php echo $d['id']; ?>&type=proposal" target="_blank"><i data-lucide="file-spreadsheet" class="lucide-icon me-2"></i> Business Proposal</a></li>
+                                        <?php if (hasPermission('edit_deals') && !$isClosed): ?>
                                             <li><hr class="dropdown-divider"></li>
-                                            <li class="dropdown-header small text-muted">Direct Stage Move</li>
+                                            <li><a class="dropdown-item py-2" href="#" onclick="editDeal(<?php echo $d['id']; ?>); return false;"><i data-lucide="edit-3" class="lucide-icon me-2"></i> Edit Deal</a></li>
+                                            <li class="dropdown-header small text-muted mt-1">Direct Stage Move</li>
                                             <?php foreach ($stages as $sk => $si): ?>
                                                 <?php if ($sk !== $d['stage']): ?>
                                                     <li><a class="dropdown-item py-1.5 small" href="#" onclick="updateDealStage(<?php echo $d['id']; ?>, '<?php echo $sk; ?>', '<?php echo htmlspecialchars(addslashes($d['title'])); ?>'); return false;"><?php echo htmlspecialchars($si['title']); ?></a></li>
@@ -449,9 +455,14 @@ $nextStageMap = [
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 text-small">
                                             <li><a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="viewDealModal(<?php echo $d['id']; ?>); return false;"><i data-lucide="eye" class="lucide-icon text-muted"></i> View Details</a></li>
-                                            <?php if (hasPermission('edit_deals')): ?>
-                                                <li><a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="editDeal(<?php echo $d['id']; ?>); return false;"><i data-lucide="edit-3" class="lucide-icon text-muted"></i> Edit Deal</a></li>
+                                            <li><hr class="dropdown-divider my-1"></li>
+                                            <li class="dropdown-header small text-muted">Print Client Documents</li>
+                                            <li><a class="dropdown-item py-1.5 small text-primary d-flex align-items-center gap-2" href="<?php echo BASE_URL; ?>/modules/deals/print.php?id=<?php echo $d['id']; ?>&type=quote" target="_blank"><i data-lucide="printer" class="lucide-icon"></i> Official Quotation</a></li>
+                                            <li><a class="dropdown-item py-1.5 small text-success d-flex align-items-center gap-2" href="<?php echo BASE_URL; ?>/modules/deals/print.php?id=<?php echo $d['id']; ?>&type=invoice" target="_blank"><i data-lucide="file-text" class="lucide-icon"></i> Commercial Invoice</a></li>
+                                            <li><a class="dropdown-item py-1.5 small text-info d-flex align-items-center gap-2" href="<?php echo BASE_URL; ?>/modules/deals/print.php?id=<?php echo $d['id']; ?>&type=proposal" target="_blank"><i data-lucide="file-spreadsheet" class="lucide-icon"></i> Business Proposal</a></li>
+                                            <?php if (hasPermission('edit_deals') && !$isClosed): ?>
                                                 <li><hr class="dropdown-divider my-1"></li>
+                                                <li><a class="dropdown-item py-2 d-flex align-items-center gap-2" href="#" onclick="editDeal(<?php echo $d['id']; ?>); return false;"><i data-lucide="edit-3" class="lucide-icon text-muted"></i> Edit Deal</a></li>
                                                 <?php if (isset($nextStageMap[$d['stage']])): ?>
                                                     <li>
                                                         <a class="dropdown-item py-2 text-primary fw-semibold d-flex align-items-center gap-2" href="#" onclick="advanceDealStage(<?php echo $d['id']; ?>, '<?php echo $d['stage']; ?>', '<?php echo htmlspecialchars(addslashes($d['title'])); ?>', <?php echo $d['value']; ?>, '<?php echo $d['currency_symbol']; ?>'); return false;">
@@ -459,18 +470,16 @@ $nextStageMap = [
                                                         </a>
                                                     </li>
                                                 <?php endif; ?>
-                                                <?php if (!in_array($d['stage'], ['closed_won', 'closed_lost'])): ?>
-                                                    <li>
-                                                        <a class="dropdown-item py-2 text-success d-flex align-items-center gap-2" href="#" onclick="markDealWon(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>', <?php echo $d['value']; ?>, '<?php echo $d['currency_symbol']; ?>'); return false;">
-                                                            <i data-lucide="trophy" class="lucide-icon text-success"></i> Mark Closed Won
-                                                        </a>
-                                                    </li>
-                                                    <li>
-                                                        <a class="dropdown-item py-2 text-danger d-flex align-items-center gap-2" href="#" onclick="markDealLost(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>'); return false;">
-                                                            <i data-lucide="x-circle" class="lucide-icon text-danger"></i> Mark Closed Lost
-                                                        </a>
-                                                    </li>
-                                                <?php endif; ?>
+                                                <li>
+                                                    <a class="dropdown-item py-2 text-success d-flex align-items-center gap-2" href="#" onclick="markDealWon(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>', <?php echo $d['value']; ?>, '<?php echo $d['currency_symbol']; ?>'); return false;">
+                                                        <i data-lucide="trophy" class="lucide-icon text-success"></i> Mark Closed Won
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item py-2 text-danger d-flex align-items-center gap-2" href="#" onclick="markDealLost(<?php echo $d['id']; ?>, '<?php echo htmlspecialchars(addslashes($d['title'])); ?>'); return false;">
+                                                        <i data-lucide="x-circle" class="lucide-icon text-danger"></i> Mark Closed Lost
+                                                    </a>
+                                                </li>
                                                 <li class="dropdown-header small text-muted mt-1">Direct Stage Move</li>
                                                 <?php foreach ($stages as $sk => $si): ?>
                                                     <?php if ($sk !== $d['stage']): ?>
@@ -744,9 +753,9 @@ $nextStageMap = [
             <h5 class="offcanvas-title fw-bold text-white mt-1 mb-0" id="viewDealTitle" style="font-family: 'Outfit', sans-serif;">Deal Details</h5>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <button type="button" class="btn btn-sm rounded-pill" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);" onclick="openPrintModal()">
-                <i data-lucide="printer" class="lucide-icon me-1"></i> Print
-            </button>
+            <a href="#" id="viewPrintBtn" target="_blank" class="btn btn-sm rounded-pill" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">
+                <i data-lucide="printer" class="lucide-icon me-1"></i> Print Client Document
+            </a>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
     </div>
@@ -1402,9 +1411,16 @@ function updateStageProgress() {
 }
 
 function openPrintModal() {
-    const modal = new bootstrap.Modal(document.getElementById('printModal'));
-    modal.show();
-    updatePrintPreview();
+    const dealIdInput = document.getElementById('dealId');
+    const dealId = dealIdInput ? dealIdInput.value : (currentViewDealId || 0);
+    const docTypeSelect = document.getElementById('docType');
+    const type = docTypeSelect ? docTypeSelect.value : 'quote';
+
+    if (dealId && parseInt(dealId) > 0) {
+        window.open('<?php echo BASE_URL; ?>/modules/deals/print.php?id=' + dealId + '&type=' + type, '_blank');
+    } else {
+        showToast('Please save the deal first before generating printable documents.', 'warning');
+    }
 }
 
 function updatePrintPreview() {
@@ -1663,6 +1679,10 @@ function editDeal(id) {
     .then(res => {
         if (res.success && res.data) {
             const d = res.data;
+            if (d.stage === 'closed_won' || d.stage === 'closed_lost') {
+                showToast('Closed deals (Won or Lost) cannot be edited.', 'warning');
+                return;
+            }
             document.getElementById('dealId').value = d.id;
             document.getElementById('dealTitleInput').value = d.title || '';
             document.getElementById('dealCustomerId').value = d.customer_id || '';
@@ -1837,6 +1857,37 @@ function executeStageUpdate(id, stage) {
     });
 }
 
+async function archiveDeal(id) {
+    const confirmed = await window.appConfirm({
+        title: 'Archive Opportunity',
+        message: 'Are you sure you want to archive this deal? It will be removed from your active pipeline view.',
+        confirmText: 'Yes, Archive Deal',
+        cancelText: 'Cancel',
+        isDanger: true
+    });
+
+    if (confirmed) {
+        fetch('<?php echo BASE_URL; ?>/ajax/deals/archive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+        })
+        .then(res => res.json())
+        .then(res => {
+            if (res.success) {
+                showToast(res.message || 'Deal archived successfully', 'success');
+                setTimeout(() => window.location.reload(), 600);
+            } else {
+                showToast(res.message || 'Failed to archive deal', 'danger');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('Server error archiving deal', 'danger');
+        });
+    }
+}
+
 function selectStageTab(stage) {
     currentSelectedStage = stage;
     document.querySelectorAll('.stage-tab').forEach(btn => {
@@ -2001,10 +2052,25 @@ function viewDealModal(id) {
                 else dualInfo.classList.add('d-none');
             }
 
+            const viewPrintBtn = document.getElementById('viewPrintBtn');
+            if (viewPrintBtn) {
+                viewPrintBtn.href = '<?php echo BASE_URL; ?>/modules/deals/print.php?id=' + id + '&type=quote';
+            }
+
             document.getElementById('viewDealStageNotes').textContent = d.stage_notes || 'No stage notes recorded.';
             document.getElementById('viewDealDescription').textContent = d.description || 'No description notes provided.';
             document.getElementById('viewDealTerms').textContent = d.terms_conditions || 'Standard payment and delivery terms apply.';
             
+            const isClosed = (d.stage === 'closed_won' || d.stage === 'closed_lost');
+            const editBtn = document.getElementById('viewEditTriggerBtn');
+            if (editBtn) {
+                if (isClosed) {
+                    editBtn.classList.add('d-none');
+                } else {
+                    editBtn.classList.remove('d-none');
+                }
+            }
+
             new bootstrap.Offcanvas(document.getElementById('dealViewOffcanvas')).show();
         }
     });
